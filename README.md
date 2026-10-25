@@ -59,25 +59,14 @@ No requiere permisos de administrador. Opciones: `-InstallDir`, `-ConfigPath`, `
 
 ### Que lo instale una IA
 
-Pega este prompt en OpenCode, Claude Code o cualquier agente con acceso a terminal:
+Pega esto en OpenCode, Claude Code o cualquier agente con terminal:
 
 ```text
-Instálame el MCP de ETABS en esta PC (Windows). Repo:
-https://github.com/david-mamani/etabs-mcp
-
-Ejecuta el instalador oficial:
-irm https://raw.githubusercontent.com/david-mamani/etabs-mcp/main/install.ps1 | iex
-
-Luego:
-1. Confirma que %LOCALAPPDATA%\etabs-mcp\etabs-mcp.exe existe y responde a --help.
-2. Revisa que mi opencode.json tenga el servidor "etabs" apuntando a ese .exe
-   (el instalador lo agrega y deja un respaldo .bak-etabs-*).
-3. No borres ni modifiques mis otros servidores MCP.
-4. Dime qué debo reiniciar y cómo verificar con get_status.
-
-Requisito: ETABS 21+ instalado, abierto y con un modelo cargado.
-Si algo falla, muéstrame el error y la ruta del respaldo del config.
+Instala este MCP en mi PC: https://github.com/david-mamani/etabs-mcp
+Al terminar, pruébalo con get_status y dime si conectó.
 ```
+
+El agente sigue el README: corre el instalador, deja el `.exe` en `%LOCALAPPDATA%\etabs-mcp\`, respalda el `opencode.json` y registra el servidor. Solo necesita Windows y ETABS 21+ instalado.
 
 ### Opción A — Claude Desktop (un solo archivo)
 
