@@ -42,6 +42,43 @@ Este repositorio es un fork mantenido de [Shekh-Muhsen/ETABS-MCP](https://github
 
 ## Instalación
 
+### Instalación automática (recomendada, un comando)
+
+```powershell
+irm https://raw.githubusercontent.com/david-mamani/etabs-mcp/main/install.ps1 | iex
+```
+
+Qué hace:
+
+1. Descarga `etabs-mcp.exe` del último release.
+2. Lo deja en `%LOCALAPPDATA%\etabs-mcp\etabs-mcp.exe`.
+3. Respalda tu `opencode.json` y registra el servidor `etabs` (si ya existe, solo actualiza la ruta).
+4. Prueba que el ejecutable arranque.
+
+No requiere permisos de administrador. Opciones: `-InstallDir`, `-ConfigPath`, `-SkipConfig` y `-ExpectedSha256` (si lo corres desde un archivo en vez de `irm`).
+
+### Que lo instale una IA
+
+Pega este prompt en OpenCode, Claude Code o cualquier agente con acceso a terminal:
+
+```text
+Instálame el MCP de ETABS en esta PC (Windows). Repo:
+https://github.com/david-mamani/etabs-mcp
+
+Ejecuta el instalador oficial:
+irm https://raw.githubusercontent.com/david-mamani/etabs-mcp/main/install.ps1 | iex
+
+Luego:
+1. Confirma que %LOCALAPPDATA%\etabs-mcp\etabs-mcp.exe existe y responde a --help.
+2. Revisa que mi opencode.json tenga el servidor "etabs" apuntando a ese .exe
+   (el instalador lo agrega y deja un respaldo .bak-etabs-*).
+3. No borres ni modifiques mis otros servidores MCP.
+4. Dime qué debo reiniciar y cómo verificar con get_status.
+
+Requisito: ETABS 21+ instalado, abierto y con un modelo cargado.
+Si algo falla, muéstrame el error y la ruta del respaldo del config.
+```
+
 ### Opción A — Claude Desktop (un solo archivo)
 
 1. Descarga `etabs-mcp.mcpb` desde [Releases](../../releases/latest).
@@ -194,6 +231,7 @@ mcpb/
   etabs-mcp.spec           ← spec de PyInstaller
   manifest.json            ← manifiesto del paquete .mcpb
 build.ps1                  ← build + empaquetado en un comando
+install.ps1                ← instalador de un comando (exe + opencode.json)
 build_api_index.py         ← índice desde el CHM de ETABS
 build_api_index_typelib.py ← índice desde ETABSv1.tlb
 ```
