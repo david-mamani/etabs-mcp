@@ -68,3 +68,7 @@ chm_pages/
 # IDE
 .vscode/
 .idea/
+
+# Tests / logs
+.pytest_cache/
+*.log

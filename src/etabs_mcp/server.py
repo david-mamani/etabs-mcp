@@ -552,6 +552,7 @@ def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = No
 
     mcp = FastMCP(
         "ETABS MCP",
+        version=SERVER_VERSION,
         instructions=(
             "This MCP server bridges AI agents to CSI ETABS via the ETABS COM API. "
             "Use `discover_api` first to list available skills and guidance, then call "

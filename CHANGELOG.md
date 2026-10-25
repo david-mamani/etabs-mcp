@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.1] — 2026-10-25
+
+Fork mantenido por David Mamani, basado en [Shekh-Muhsen/ETABS-MCP](https://github.com/Shekh-Muhsen/ETABS-MCP) v2.1.0.
+
+### Fixed
+- **Compatibilidad con `mcp >= 2.3`** — la librería renombró `McpError` a `MCPError` y el import directo rompía el arranque del servidor (`ImportError: cannot import name 'McpError'`). Ahora se importa `MCPError` con fallback a `McpError` en `src/etabs_mcp/file_io/helpers.py`.
+
+### Changed
+- `fastmcp` pasa de `>=3.2.3,<4` a `>=3.2.3,<5` (el binario se compila y prueba con fastmcp 4.1.0).
+- README reescrito en español con instalación para OpenCode, Claude Desktop y desde código fuente.
+- Se deja de versionar `etabs-mcp.mcpb` y los `__pycache__/*.pyc`; los binarios se publican como *assets* del release.
+- Se agrega `LICENSE` con la atribución MIT del proyecto original.
+
+---
+
 ## [2.1.0] - 2026-07-11
 
 ### Added — Load Setup & Combination Skills (from plugin source)
@@ -21,7 +36,7 @@ Two new workflow skills derived from the `Form1.Tab.LoadSetup.cs` and `Form1.Tab
 
 Six new workflow skills derived from the CSiNET8PluginMhn plugin source, covering BNBC 2020 / ASCE 7 structural code checks:
 
-- **`workflow-drift-check-bnbc`** — Dual-method inter-story drift check: ETABS `StoryDrifts` API result and independent hand calc `(δᵢ − δ_below) / h` from joint displacements. Applies Cd/I amplification and compares against BNBC 2020 Table 6.2.21 / ASCE 7-05 Table 12.12-1 occupancy-based allowables.
+- **`workflow-drift-check-bnbc`** — Dual-method inter-story drift check: ETABS `StoryDrifts` API result and independent hand calc `(δᵢ − δ_below) / h`. Applies Cd/I amplification and compares against BNBC 2020 Table 6.2.21 / ASCE 7-05 Table 12.12-1 occupancy-based allowables.
 - **`workflow-irregularity-check`** — Vertical irregularity checks from the `Story Stiffness` and `Centers Of Mass And Rigidity` database tables: soft story (K < 0.7·K_above or K < 0.8·avg3; extreme at 0.6/0.7 thresholds), mass irregularity (m > 1.5×adjacent story, roof exempt), and CM-CR eccentricity per diaphragm.
 - **`workflow-otm-check`** — Overturning moment hand calculation per BNBC 2020 §2.5.7: reads story heights from the model, computes T = Ct·hn^m, spectral Sa, base shear V = Sa/(R/I)·W, vertical distribution exponent k, story lateral forces Fx, and cumulative OTMx. Foundation OTM = 0.75×base OTM check vs 2/3·M_DL.
 - **`workflow-story-forces`** — Reads the `Story Forces` results table (Location = Bottom) for story P, VX, VY, T, MX, MY in kN/kN·m with unit conversion from lb_in_F. Appends foundation OTM = 0.75×MX/MY columns.
@@ -38,7 +53,3 @@ Six new workflow skills derived from the CSiNET8PluginMhn plugin source, coverin
 
 ### Added
 - Initial release: geometry, loads, analysis, results, and design skills.
-- BM25 semantic search over 2,458 ETABS API methods.
-- BNBC 2020 and IBC 2012 seismic parameter and design equation skills.
-- Response-spectrum auto-seismic and RS function skills.
-- `etabs-database-tables`, `etabs-errors`, `etabs-results`, `etabs-design` reference skills.

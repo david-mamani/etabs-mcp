@@ -1,273 +1,230 @@
 # ETABS MCP Server
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
-![ETABS](https://img.shields.io/badge/ETABS-21%2B-orange)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue)](./CHANGELOG.md)
+[![ETABS](https://img.shields.io/badge/ETABS-21%2B-orange)](#requisitos)
+[![Platform](https://img.shields.io/badge/plataforma-Windows-lightgrey)](#requisitos)
+[![License](https://img.shields.io/badge/licencia-MIT-green)](./LICENSE)
 
-> **Connect Claude AI directly to your CSI ETABS structural model — query, analyze, and design with natural language.**
+> Servidor [MCP](https://modelcontextprotocol.io) que conecta un agente (OpenCode, Claude Desktop, Claude Code, Cursor…) con un modelo **CSI ETABS** abierto, usando la API COM oficial.
 
-**etabs-mcp** is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gives Claude direct access to your live CSI ETABS model through the ETABS COM API. Describe what you need in plain English — Claude finds the right API methods, writes the code, runs it against your open model, and returns the results. No scripting required.
+Le hablas en lenguaje natural y el agente busca el método correcto de la API, escribe el código, lo ejecuta contra tu modelo y te devuelve los resultados. Sin scripts, sin buscar firmas de métodos a mano.
 
----
-
-## What Can You Do With It?
-
-| Category | Example prompt |
-|----------|---------------|
-| Seismic check | *"Check modal mass participation — do we meet the 90% requirement?"* |
-| Story drifts | *"Extract all story drifts for seismic combos and flag anything over h/400"* |
-| Base shear | *"What is the base shear for EQX and EQY?"* |
-| Results | *"Run analysis then extract pier forces for all piers at every story"* |
-| Design | *"Run concrete design and show me the worst DCR ratios"* |
-| RS scaling | *"Scale the response spectrum by 0.85 × static base shear and re-run"* |
-| Audit | *"List all frame sections used in the model and their assignments"* |
+Este repositorio es un fork mantenido de [Shekh-Muhsen/ETABS-MCP](https://github.com/Shekh-Muhsen/ETABS-MCP) v2.1.0 (MIT), con el arreglo de compatibilidad para `mcp >= 2.3` y documentación de instalación en español. Ver [créditos](#créditos).
 
 ---
 
-## Features
+## Qué puedes pedirle
 
-### Natural Language to ETABS
-Claude translates your request into ETABS COM API calls automatically — no scripting, no manual method lookup.
-
-- **21 built-in skill documents** — step-by-step guidance for every area of the ETABS API (geometry, loads, analysis, results, design, troubleshooting)
-- **BM25 API search** over **2,458 ETABS methods** — Claude finds the exact method name, parameter order, and return format before writing any code
-- **Structural vocabulary expansion** — abbreviations like `GetDispl`, `BaseReact`, `ModalFreq` are matched by full English queries
-
-### Full ETABS API Coverage
-
-| Area | What's covered |
-|------|---------------|
-| Geometry | Joints, frames, areas, stories, groups, restraints |
-| Materials & Sections | Steel, concrete, rebar; frame and area sections |
-| Loads | Patterns, static/modal/response spectrum cases, combinations, joint/frame/area loads |
-| Analysis | Linear static, P-delta, modal (Ritz/Eigen), nonlinear staged construction |
-| Results | Joint displacements, base reactions, frame forces, story drifts, modal periods, mass participation, pier/spandrel forces |
-| Design | Steel (AISC 360, EC3, AS4100+), concrete (ACI 318, EC2, IS 456+), composite, shear wall |
-| Database Tables | Bulk read of all **165 ETABS database tables** via `GetTableForDisplayArray` |
-
-### Built-in Workflow Skills
-
-| Skill | What it does |
-|-------|-------------|
-| `workflow-seismic-check` | Full dynamic seismic check — modal periods, mass participation, base shear, story drifts |
-| `workflow-modal-report` | Modal analysis report with Ritz/Eigen mass participation table |
-| `workflow-story-drift` | Story drift extraction and code compliance check |
-| `workflow-base-shear` | Base shear summary across all seismic load cases |
-| `workflow-frame-forces` | Frame force extraction by group or story |
-| `workflow-gravity-report` | Gravity load reaction summary |
-| `workflow-design-concrete` | Concrete frame design run and DCR summary |
-| `workflow-seismic-params` | Seismic parameters extraction and verification |
-| `workflow-rs-scaling` | Response spectrum scaling (85% rule) |
-| `workflow-model-audit` | Full model inventory — geometry counts, sections, materials, cases |
-| `workflow-modifiers` | Frame and area stiffness modifier review and assignment |
-| `etabs-database-tables` | Complete guide to all 165 database tables with field schemas |
-| `etabs-errors` | Troubleshooting guide — ret codes, locked model, COM issues |
-
-### New in v2.1 — Load Setup & Combination Skills (from plugin source)
-
-| Skill | What it does |
-|-------|-------------|
-| `workflow-load-patterns-cases` | Create gravity (SuperDead/Live), seismic ELF (ASCE 7-05 auto), and wind patterns; composite DL/LLA cases; Ev = 0.2·SDS×Dead; modal and RS cases — idempotent, only creates what is missing |
-| `workflow-load-combinations` | Full ASCE 7-05 / BNBC 2020 combo library (68 combos): SLS gravity/wind/seismic, ULS gravity/wind, ULS seismic RS and ELF (100%+30% ±Ev) with role mapping D/L/Lr/Ex/Ey/Wx/Wy/Sx/Sy/Ev |
-
-### New in v2.0 — Code Check Workflow Skills (from plugin source)
-
-| Skill | What it does |
-|-------|-------------|
-| `workflow-drift-check-bnbc` | Dual-method drift check: ETABS StoryDrifts + hand calc (δᵢ−δ_below)/h with Cd/I and BNBC 2020 / ASCE 7 occupancy-based limits |
-| `workflow-irregularity-check` | Soft story (stiffness K ratios), mass irregularity (>1.5×adjacent), CM-CR eccentricity per BNBC 2020 / ASCE 7-05 §12.3.2 |
-| `workflow-otm-check` | Overturning moment hand calc per BNBC 2020 — T, Sa, V, k, Fx per story, OTMx, foundation OTM = 0.75×OTM |
-| `workflow-story-forces` | Story shears and overturning moments from ETABS "Story Forces" table (Location=Bottom) + 0.75×M foundation reduction |
-| `workflow-mass-participation` | Modal mass participation ratios, 90% UX/UY target check, defined vs actual mode count comparison |
-| `workflow-torsion-check` | Torsional irregularity δ_max/δ_avg per story (edge joint pairs), Ax amplification factor, ASCE 7 Type 1a/1b classification |
-
-### Safe Execution Sandbox
-- Code runs in a **restricted Python sandbox** — no arbitrary imports, no filesystem writes, no shell access
-- Only `model` (SapModel), `json`, and `math` are available inside executed code
-- All processing is local — no data leaves your machine
-
-### Lightweight & Fast
-- **40.8 MB** single-file `.mcpb` extension — no Python or runtime installation required
-- Starts in under 1 second — BM25 keyword search, no PyTorch or ML models
-- **Zero install** — drag `.mcpb` onto Claude Desktop and you're ready
-
-### Developer-Friendly
-- Add custom skills by dropping `.md` files next to the exe — no rebuild needed
-- `build.ps1` one-command build: PyInstaller → stage → mcpb pack → optional hot-swap
-- Two API index builders: CHM HTML parser + direct type library extractor (`ETABSv1.tlb`)
+| Área | Ejemplo de prompt |
+|---|---|
+| Sismo | *"Verifica la participación de masa modal, ¿cumple el 90%?"* |
+| Derivas | *"Extrae las derivas de entrepiso para los combos sísmicos y marca lo que pase h/400"* |
+| Cortante basal | *"¿Cuál es el cortante basal en EQX y EQY?"* |
+| Resultados | *"Corre el análisis y saca las fuerzas de los piers en todos los pisos"* |
+| Diseño | *"Corre el diseño de concreto y muéstrame los DCR más desfavorables"* |
+| Espectro | *"Escala el espectro por 0.85 del cortante estático y vuelve a correr"* |
+| Auditoría | *"Lista todas las secciones de frame usadas y sus asignaciones"* |
 
 ---
 
-## Requirements
+## Requisitos
 
-| Requirement | Version |
-|-------------|---------|
-| OS | Windows 10/11 (64-bit) |
-| CSI ETABS | 21.0 or later, running with a model open |
-| Claude Desktop | Latest |
+| Requisito | Versión |
+|---|---|
+| Sistema operativo | Windows 10/11 (64 bits) |
+| CSI ETABS | **21.0 o superior**, abierto y con un modelo cargado |
+| Cliente MCP | OpenCode, Claude Desktop, Claude Code, Cursor, etc. |
+| Python (solo si compilas) | 3.11+ |
+
+> ETABS debe estar **abierto con un modelo** antes de usar las herramientas. La conexión es por COM (`ETABSv1`), así que no funciona en Linux/macOS ni sin ETABS instalado.
 
 ---
 
-## Installation
+## Instalación
 
-### Option A — Claude Desktop extension (recommended, no Python needed)
+### Opción A — Claude Desktop (un solo archivo)
 
-1. Download **`etabs-mcp.mcpb`** from [Releases](../../releases)
-2. Open **Claude Desktop** → **Settings** → **Extensions**
-3. Drag `etabs-mcp.mcpb` onto the Extensions window
-4. Open ETABS and load a model
-5. Start a new Claude conversation — Claude now has access to your model
+1. Descarga `etabs-mcp.mcpb` desde [Releases](../../releases/latest).
+2. Abre Claude Desktop → **Settings** → **Extensions**.
+3. Arrastra el `.mcpb` sobre la ventana (o "Install from file").
+4. Abre ETABS con un modelo.
+5. Nueva conversación: pídele que llame a `discover_api`.
 
-### Option B — Run from source (Python 3.11+)
+### Opción B — OpenCode / cualquier cliente con config JSON
 
-```powershell
-# Clone and install
-git clone https://github.com/your-org/etabs-mcp.git
-cd etabs-mcp
-pip install .
+Descarga `etabs-mcp.exe` del [release](../../releases/latest) y guárdalo, por ejemplo, en `C:\Tools\etabs-mcp\etabs-mcp.exe`.
 
-# Start the server (stdio, for Claude Desktop)
-etabs-mcp
+En `opencode.json` (global: `~/.config/opencode/opencode.json`):
 
-# Or HTTP mode with bearer token
-etabs-mcp --transport http --port 18121 --token <your-token>
+```json
+{
+  "mcp": {
+    "etabs": {
+      "type": "local",
+      "command": ["C:\\Tools\\etabs-mcp\\etabs-mcp.exe"],
+      "enabled": true
+    }
+  }
+}
 ```
 
-Add to `claude_desktop_config.json` (stdio mode):
+En Claude Desktop (`claude_desktop_config.json`), el mismo binario en modo `stdio`:
 
 ```json
 {
   "mcpServers": {
-    "etabs-mcp": {
-      "command": "etabs-mcp",
+    "etabs": {
+      "command": "C:\\Tools\\etabs-mcp\\etabs-mcp.exe",
       "args": []
     }
   }
 }
 ```
 
-### Restricting file access
+Reinicia el cliente y verifica con la herramienta `get_status`.
 
-Use `--allowed-dirs` to limit which directories the server can read/write for file I/O:
-
-```powershell
-etabs-mcp --allowed-dirs "C:\Projects\MyBuilding" "C:\Exports"
-```
-
----
-
-## Tools
-
-| Tool | Description |
-|------|-------------|
-| `discover_api` | List all available skills — **call this first** |
-| `read_skills` | Load one or more skill documents by name |
-| `list_instances` | Show running ETABS instances (alias, PID, file, version) |
-| `get_status` | Check connection, ETABS version, lock state, server version |
-| `execute_code` | Run Python in a sandbox against the live ETABS model |
-| `search_docs` | BM25 search over 2,458 ETABS API methods |
-
----
-
-## Example Session
-
-```
-User:  Run a seismic check on my model
-
-Claude: [calls discover_api]
-        [calls read_skills(["workflow-seismic-check"])]
-        [calls get_status → connected, model locked]
-        [calls execute_code → extracts modal periods, mass participation, base shear, story drifts]
-
-        Here is the seismic check summary:
-        • Modal periods: T1=1.24s, T2=1.18s, T3=0.41s
-        • Mass participation: UX=94.2% ✅, UY=91.8% ✅ (>90% achieved at mode 12)
-        • Base shear: EQX=1842 kN, EQY=1756 kN
-        • Max story drift: 0.0041 at Story 5 (EQX) — exceeds h/400 limit ⚠️
-```
-
----
-
-## Building from Source
+### Opción C — Desde código fuente
 
 ```powershell
-# Install dependencies
-pip install pyinstaller rank_bm25 numpy fastmcp uvicorn comtypes pywin32 beautifulsoup4
+git clone https://github.com/david-mamani/etabs-mcp.git
+cd etabs-mcp
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e .
 
-# Build exe + mcpb
+# stdio (clientes MCP)
+etabs-mcp
+
+# HTTP local con bearer token (opcional)
+etabs-mcp --transport http --port 18121 --token <tu-token>
+```
+
+### Limitar acceso a archivos
+
+Por defecto el servidor solo puede leer/escribir en los directorios que le permitas explícitamente con `--allowed-dirs`:
+
+```powershell
+etabs-mcp --allowed-dirs "C:\Proyectos\Edificio" "C:\Export"
+```
+
+---
+
+## Herramientas expuestas
+
+| Herramienta | Qué hace |
+|---|---|
+| `discover_api` | Lista las skills disponibles. **Llamar primero.** |
+| `read_skills` | Carga una o más skills por nombre (guía paso a paso). |
+| `list_instances` | Instancias de ETABS abiertas (alias, PID, archivo, versión). |
+| `get_status` | Estado de la conexión, versión de ETABS, si el modelo está bloqueado, versión del servidor. |
+| `execute_code` | Ejecuta Python en un sandbox contra el `SapModel` conectado. |
+| `search_docs` | Búsqueda BM25 sobre **2 458 métodos** de la API de ETABS. |
+
+**Sandbox:** el código corre restringido — sin `import`, sin acceso al sistema de archivos, sin shell. Solo están disponibles `model` (`SapModel`), `json` y `math`. Todo el procesamiento es local; no se envía nada a la nube.
+
+---
+
+## Skills incluidas (47)
+
+| Familia | Contenido |
+|---|---|
+| Núcleo ETABS | `etabs-core`, `etabs-geometry`, `etabs-sections`, `etabs-materials`, `etabs-loads`, `etabs-analysis`, `etabs-results`, `etabs-design`, `etabs-errors` |
+| Tablas y utilidades | `etabs-database-tables` (165 tablas), `etabs-rs-function`, `etabs-truss-types`, `etabs-auto-seismic` |
+| Flujos de trabajo | `workflow-seismic-check`, `workflow-modal-report`, `workflow-mass-participation`, `workflow-story-drift`, `workflow-base-shear`, `workflow-frame-forces`, `workflow-story-forces`, `workflow-gravity-report`, `workflow-design-concrete`, `workflow-model-audit`, `workflow-modifiers`, `workflow-rs-scaling`, `workflow-torsion-check`, `workflow-irregularity-check`, `workflow-otm-check`, `workflow-drift-check-bnbc`, `workflow-steel-roof-truss`, `workflow-tool-test` |
+| Cargas y combos | `workflow-load-patterns-cases`, `workflow-load-combinations` |
+| Normas | `ibc2012-de10-dual-system`, `ibc2012-de11-diaphragm-class`, `ibc2012-de12-torsion-irreg`, `ibc2012-de13-reentrant-corner`, `ibc2012-de14-diaphragm-discont`, `ibc2012-de18-soft-story`, `ibc2012-de33-force-distribution`, `ibc2012-de34-torsion-amplification`, `ibc2012-de35-story-drift`, `ibc2012-de36-pdelta`, `ibc2012-seismic-params`, `bnbc2020-seismic-params`, `bnbc2020-load-combinations` |
+
+### Agregar skills sin recompilar
+
+Crea una carpeta `etabs_skills\` junto al `.exe`, con una subcarpeta por skill y un `SKILL.md` dentro:
+
+```
+etabs-mcp.exe
+etabs_skills\
+  mi-skill\
+    SKILL.md
+```
+
+```markdown
+---
+name: mi-skill
+description: Qué hace, en una línea
+---
+
+# Mi Skill
+
+...instrucciones para el agente...
+```
+
+El servidor reescanea esa carpeta en cada `discover_api`.
+
+---
+
+## Compilar el ejecutable
+
+```powershell
+pip install pyinstaller rank_bm25 numpy fastmcp uvicorn comtypes pywin32 packaging
+
+# exe -> dist\etabs-mcp.exe  y  paquete -> etabs-mcp.mcpb
 .\build.ps1
 
-# Rebuild API index from type library (when upgrading ETABS version)
-py build_api_index_typelib.py --merge
-
-# Then rebuild
+# Solo empaquetar (reusa dist\etabs-mcp.exe)
 .\build.ps1 -SkipPyInstaller
+
+# Compilar y copiar a la extensión de Claude Desktop
+.\build.ps1 -Install
 ```
 
-### API Index Sources
+La versión del `manifest.json` se sincroniza automáticamente desde `src/etabs_mcp/version.py` (`SERVER_VERSION`).
 
-| Script | Source | Methods |
-|--------|--------|---------|
-| `build_api_index.py` | ETABS CHM help file (HTML parse) | 1,464 |
-| `build_api_index_typelib.py` | `ETABSv1.tlb` type library (COM) | 2,458 |
-| **Merged (default)** | CHM quality + typelib completeness | **2,458** |
-
-### Source Layout
+### Estructura
 
 ```
 src/etabs_mcp/
-  main.py                    ← entry point
-  server.py                  ← MCP tools, BM25 search, lifespan
-  version.py                 ← SERVER_VERSION (single source of truth)
-  connection.py              ← COM connection, InstanceRegistry
-  skills.py                  ← SkillsManager (discovery, sidecar support)
-  sandbox/executor.py        ← restricted Python sandbox
-  file_io/                   ← CSV/XLSX input-output helpers
-  etabs_skills/              ← 21 built-in skill .md files
-  etabs_api_index.json       ← pre-built API index (2,458 methods)
+  main.py                  ← entrada CLI (stdio / http)
+  server.py                ← herramientas MCP, búsqueda BM25, lifespan
+  version.py               ← SERVER_VERSION (fuente única)
+  connection.py            ← conexión COM, InstanceRegistry
+  skills.py                ← SkillsManager (descubrimiento + sidecar)
+  sandbox/executor.py      ← sandbox de Python restringido
+  file_io/                 ← helpers CSV/XLSX y validación de rutas
+  etabs_skills/            ← 47 skills en Markdown
+  etabs_api_index.json     ← índice de 2 458 métodos de la API
 mcpb/
-  etabs-mcp.spec             ← PyInstaller spec
-  manifest.json              ← mcpb manifest (version auto-synced from version.py)
-build.ps1                    ← one-command build script
-build_api_index.py           ← CHM → JSON index builder
-build_api_index_typelib.py   ← ETABSv1.tlb → JSON index builder
+  etabs-mcp.spec           ← spec de PyInstaller
+  manifest.json            ← manifiesto del paquete .mcpb
+build.ps1                  ← build + empaquetado en un comando
+build_api_index.py         ← índice desde el CHM de ETABS
+build_api_index_typelib.py ← índice desde ETABSv1.tlb
+```
+
+### Regenerar el índice de la API
+
+```powershell
+py build_api_index_typelib.py --merge
+.\build.ps1 -SkipPyInstaller
 ```
 
 ---
 
-## Known Limitations
+## Limitaciones conocidas
 
-| Issue | Workaround |
-|-------|-----------|
-| `SetTableForEditingArray` — comtypes cannot pass Python lists as ByRef SAFEARRAY | Use object model methods (e.g. `model.FrameObj.SetSection()`) |
-| Results after EDB open — model locked but COM results not in memory | Unlock → set run flags → `RunAnalysis()` |
-| Ritz modal `StepNum` returns 0 | Use row index `i+1` as mode number |
-| Large model analysis via MCP | Run analysis from ETABS UI (F5) — COM can time out |
-| `SetModelIsLocked(False)` permanently deletes results | Never unlock between `RunAnalysis()` and result read |
-
----
-
-## Changelog
-
-### v1.0.0 — 2026-06-18
-
-**Initial release.**
-
-#### Features
-- `execute_code` — run Python against live ETABS model via sandboxed COM bridge
-- `search_docs` — BM25 full-text search over 2,458 ETABS API methods with structural vocabulary expansion (camelCase splitting, abbreviation → full-word mapping)
-- `discover_api` / `read_skills` — skill-based guidance system; 21 built-in skill documents covering geometry, loads, analysis, results, design, and troubleshooting
-- `list_instances` / `get_status` — multi-instance support with per-instance alias, version check, and lock state
-- File I/O — `input_data_path` / `output_data_path` for `.csv` and `.xlsx` (single-sheet and multi-sheet)
-- HTTP transport — bearer token auth, `SecFetchMiddleware`, `TrustedHostMiddleware` (localhost only)
-- Sandboxed execution — blocks `import`, `dir()`, `getattr()`, dunder access; only `model`, `json`, `math` available
-- Version guard — warns when connected ETABS version is below 21.0.0
-- Sidecar skills — drop `.md` files next to the exe to extend Claude's guidance without rebuilding
-- Single-file `.mcpb` extension — 40.8 MB, zero runtime dependencies, drag-and-drop install in Claude Desktop
+| Problema | Solución |
+|---|---|
+| `SetTableForEditingArray` — comtypes no pasa listas de Python como SAFEARRAY ByRef | Usar los métodos del modelo (p. ej. `model.FrameObj.SetSection()`) |
+| Resultados tras abrir un `.edb` — el modelo queda bloqueado y sin resultados en memoria | Desbloquear → fijar flags → `RunAnalysis()` |
+| `StepNum` en modal Ritz devuelve 0 | Usar el índice de fila `i+1` como número de modo |
+| Modelos grandes analizados desde MCP | Correr el análisis desde la UI de ETABS (F5); COM puede expirar |
+| `SetModelIsLocked(False)` borra los resultados | No desbloquear entre `RunAnalysis()` y la lectura de resultados |
 
 ---
 
-## License
+## Créditos
 
-MIT — free to use, modify, and distribute.
+- Proyecto original: [Shekh-Muhsen/ETABS-MCP](https://github.com/Shekh-Muhsen/ETABS-MCP) (MIT).
+- Este fork: David Mamani — agrega compatibilidad con `mcp >= 2.3`, limpia artefactos del repo y documenta la instalación en español.
+- CSI, ETABS y SAP2000 son marcas de Computers & Structures, Inc. Este proyecto no está afiliado ni respaldado por CSI.
+
+## Licencia
+
+MIT — ver [LICENSE](./LICENSE). Puedes usarlo, modificarlo y redistribuirlo conservando el aviso de copyright original.

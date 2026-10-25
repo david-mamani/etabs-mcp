@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from fastmcp.server.context import Context
-from mcp.shared.exceptions import McpError
+try:
+    from mcp.shared.exceptions import McpError
+except ImportError:  # mcp >= 2.3 renamed this exception to MCPError
+    from mcp.shared.exceptions import MCPError as McpError
 
 from etabs_mcp.file_io.path_validator import FileIOError, parse_roots_to_dirs, validate_io_path
 from etabs_mcp.file_io.readers import BaseReader, CSVReader, XLSXReader
