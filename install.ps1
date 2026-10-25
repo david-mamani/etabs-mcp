@@ -100,29 +100,40 @@ if ($ExpectedSha256) {
     Ok "SHA256 verificado"
 }
 
-# Si el exe esta en uso, Windows permite renombrarlo y poner el nuevo en su lugar.
-# Los procesos que ya estaban corriendo siguen usando el archivo renombrado.
+# Reemplaza el binario. Si esta en uso, Windows no deja sobrescribirlo pero si
+# renombrarlo: los procesos que ya corrian siguen usando el archivo renombrado.
 $testExe = $exePath
-$inUse = Get-Process 'etabs-mcp' -ErrorAction SilentlyContinue
-if ($inUse) {
-    $oldExe = Join-Path $InstallDir ("etabs-mcp.old-{0}.exe" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+$placed = $false
+if (Test-Path $exePath) {
     try {
-        Rename-Item $exePath $oldExe -Force
-        Move-Item $tmpPath $exePath -Force
-        Ok "Reemplazado en caliente; los procesos anteriores siguen usando $oldExe"
-        Warn "Reinicia OpenCode para que cargue el binario nuevo."
+        Move-Item $tmpPath $exePath -Force -ErrorAction Stop
+        $placed = $true
+        Ok "$exePath ($sizeMb MB)"
     } catch {
-        if (-not (Test-Path $exePath) -and (Test-Path $oldExe)) {
-            try { Rename-Item $oldExe $exePath -Force } catch { }
+        $oldExe = Join-Path $InstallDir ("etabs-mcp.old-{0}.exe" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        try {
+            Rename-Item $exePath $oldExe -Force -ErrorAction Stop
+            Move-Item $tmpPath $exePath -Force -ErrorAction Stop
+            $placed = $true
+            Ok "Reemplazado en caliente; los procesos anteriores siguen usando $oldExe"
+            Warn "Reinicia OpenCode para que cargue el binario nuevo."
+        } catch {
+            if (-not (Test-Path $exePath) -and (Test-Path $oldExe)) {
+                try { Rename-Item $oldExe $exePath -Force -ErrorAction Stop } catch { }
+            }
         }
-        $testExe = Join-Path $InstallDir 'etabs-mcp.new.exe'
-        Move-Item $tmpPath $testExe -Force
-        Warn "No pude reemplazar el exe en uso; quedo como etabs-mcp.new.exe."
-        Warn "Cierra OpenCode y renombra etabs-mcp.new.exe a etabs-mcp.exe."
     }
 } else {
-    Move-Item $tmpPath $exePath -Force
+    Move-Item $tmpPath $exePath -Force -ErrorAction Stop
+    $placed = $true
     Ok "$exePath ($sizeMb MB)"
+}
+
+if (-not $placed) {
+    $testExe = Join-Path $InstallDir 'etabs-mcp.new.exe'
+    Move-Item $tmpPath $testExe -Force
+    Warn "No pude reemplazar etabs-mcp.exe; quedo como etabs-mcp.new.exe."
+    Warn "Cierra OpenCode y renombra etabs-mcp.new.exe a etabs-mcp.exe."
 }
 
 # ---- 3. Prueba de arranque ---------------------------------------------------
