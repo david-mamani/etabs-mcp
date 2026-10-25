@@ -11,14 +11,6 @@ import secrets
 import sys
 import warnings
 
-from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
-from starlette.middleware import Middleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-
-from etabs_mcp.file_io.validation import validate_args_allowed_dirs
-from etabs_mcp.http_middleware import SecFetchMiddleware
-from etabs_mcp.server import create_mcp_server
-
 warnings.filterwarnings("ignore", message="authlib.jose module is deprecated")
 
 _HTTP_ONLY_DEFAULTS = {"port": 18121, "token": None}
@@ -50,6 +42,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="+",
         default=None,
         help="Directories the ETABS MCP server can access for file I/O (space separated)",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help=(
+            "Run the autonomous ETABS smoke test (creates, analyzes, saves and "
+            "reopens a test model), print the result and exit."
+        ),
     )
     parser.add_argument(
         "--port",
@@ -88,6 +88,21 @@ def setup_logging(log_level: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+
+    if args.self_test:
+        from etabs_mcp.selftest import run_self_test
+        from etabs_mcp.version import SERVER_VERSION
+
+        raise SystemExit(run_self_test(SERVER_VERSION))
+
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+    from starlette.middleware import Middleware
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    from etabs_mcp.file_io.validation import validate_args_allowed_dirs
+    from etabs_mcp.http_middleware import SecFetchMiddleware
+    from etabs_mcp.server import create_mcp_server
+
     setup_logging(args.log_level)
     allowed_dirs = validate_args_allowed_dirs(args.allowed_dirs)
 

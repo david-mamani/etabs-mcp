@@ -23,6 +23,9 @@
 .PARAMETER SkipConfig
     Solo descarga el exe; no toca opencode.json.
 
+.PARAMETER SkipSelfTest
+    No ejecuta la prueba autonoma con ETABS (crear, analizar y reabrir un modelo).
+
 .EXAMPLE
     .\install.ps1 -SkipConfig
 #>
@@ -31,7 +34,8 @@ param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'etabs-mcp'),
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.config\opencode\opencode.json'),
     [string]$ExpectedSha256,
-    [switch]$SkipConfig
+    [switch]$SkipConfig,
+    [switch]$SkipSelfTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +73,9 @@ if ($etabsDirs.Count -gt 0) {
 Step "Descargando etabs-mcp.exe desde el ultimo release"
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+# Limpia binarios viejos de reemplazos en caliente anteriores (si ya no estan en uso).
+Get-ChildItem $InstallDir -Filter 'etabs-mcp.old-*.exe' -File -ErrorAction SilentlyContinue |
+    ForEach-Object { try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { } }
 $exePath = Join-Path $InstallDir 'etabs-mcp.exe'
 $tmpPath = "$exePath.download"
 
@@ -93,13 +100,26 @@ if ($ExpectedSha256) {
     Ok "SHA256 verificado"
 }
 
-# Si el exe esta en uso, se conserva el actual y se deja el nuevo al lado.
+# Si el exe esta en uso, Windows permite renombrarlo y poner el nuevo en su lugar.
+# Los procesos que ya estaban corriendo siguen usando el archivo renombrado.
+$testExe = $exePath
 $inUse = Get-Process 'etabs-mcp' -ErrorAction SilentlyContinue
 if ($inUse) {
-    Warn "Hay $($inUse.Count) proceso(s) etabs-mcp en ejecucion; cierralos o reinicia el cliente MCP."
-    $exePath = Join-Path $InstallDir 'etabs-mcp.new.exe'
-    Move-Item $tmpPath $exePath -Force
-    Ok "Descargado como $exePath (reemplaza el actual cuando se libere)"
+    $oldExe = Join-Path $InstallDir ("etabs-mcp.old-{0}.exe" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    try {
+        Rename-Item $exePath $oldExe -Force
+        Move-Item $tmpPath $exePath -Force
+        Ok "Reemplazado en caliente; los procesos anteriores siguen usando $oldExe"
+        Warn "Reinicia OpenCode para que cargue el binario nuevo."
+    } catch {
+        if (-not (Test-Path $exePath) -and (Test-Path $oldExe)) {
+            try { Rename-Item $oldExe $exePath -Force } catch { }
+        }
+        $testExe = Join-Path $InstallDir 'etabs-mcp.new.exe'
+        Move-Item $tmpPath $testExe -Force
+        Warn "No pude reemplazar el exe en uso; quedo como etabs-mcp.new.exe."
+        Warn "Cierra OpenCode y renombra etabs-mcp.new.exe a etabs-mcp.exe."
+    }
 } else {
     Move-Item $tmpPath $exePath -Force
     Ok "$exePath ($sizeMb MB)"
@@ -109,7 +129,7 @@ if ($inUse) {
 Step "Probando el ejecutable"
 
 try {
-    $help = & $exePath --help 2>&1 | Out-String
+    $help = & $testExe --help 2>&1 | Out-String
 } catch {
     Fail "El ejecutable no arranco: $($_.Exception.Message)"
 }
@@ -177,15 +197,77 @@ if ($SkipConfig) {
     Ok "Configuracion: $ConfigPath"
 }
 
-# ---- 5. Resumen --------------------------------------------------------------
+# ---- 5. Prueba autonoma con ETABS --------------------------------------------
+$selfTestStatus = 'skipped'
+$smokeFile = Join-Path $env:LOCALAPPDATA 'etabs-mcp\smoke-test\etabs-mcp-smoke.EDB'
+if ($SkipSelfTest) {
+    Step "Prueba autonoma omitida (-SkipSelfTest)"
+} else {
+    Step "Prueba autonoma: creando, analizando y reabriendo un modelo ETABS"
+    Write-Host "    ETABS se abre y se cierra solo; normalmente tarda 1-3 minutos..." -ForegroundColor Gray
+
+    $log = Join-Path $env:TEMP ("etabs-mcp-selftest-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $errLog = "$log.err"
+    $proc = $null
+    $finished = $false
+    try {
+        $proc = Start-Process -FilePath $testExe -ArgumentList '--self-test' -NoNewWindow -PassThru `
+            -RedirectStandardOutput $log -RedirectStandardError $errLog
+        $finished = $proc.WaitForExit(600000)
+    } catch {
+        Warn "No pude ejecutar la prueba: $($_.Exception.Message)"
+    }
+
+    if (-not $finished) {
+        if ($proc) { try { $proc.Kill() } catch { } }
+        Warn "La prueba excedio 10 minutos y se cancelo."
+        if (Test-Path $log) { Get-Content $log | Write-Host }
+        if (Test-Path $errLog) { Get-Content $errLog | Write-Host }
+        $selfTestStatus = 'fail'
+    } else {
+        if (Test-Path $log) { Get-Content $log | Write-Host }
+        if (Test-Path $errLog) {
+            $errText = Get-Content $errLog -Raw
+            if (-not [string]::IsNullOrWhiteSpace($errText)) { Write-Host $errText -ForegroundColor DarkGray }
+        }
+
+        if ($proc.ExitCode -eq 0) {
+            Ok "Prueba superada: el archivo ETABS se creo, analizo y reabrio."
+            $selfTestStatus = 'pass'
+        } elseif ($proc.ExitCode -eq 2) {
+            Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
+            $selfTestStatus = 'skip'
+        } else {
+            Warn "La prueba fallo (exit $($proc.ExitCode)). El MCP quedo instalado igual."
+            $selfTestStatus = 'fail'
+        }
+    }
+
+    Remove-Item $log, $errLog -Force -ErrorAction SilentlyContinue
+}
+
+# ---- 6. Resumen --------------------------------------------------------------
 Step "Listo"
+$selfTestText = if ($selfTestStatus -eq 'pass') {
+    'PASS - modelo ETABS creado y reabierto'
+} elseif ($selfTestStatus -eq 'skip') {
+    'SKIP - ETABS no instalado'
+} elseif ($selfTestStatus -eq 'fail') {
+    'FAIL - revisa el detalle de arriba'
+} else {
+    'omitida (-SkipSelfTest)'
+}
+
 Write-Host ""
 Write-Host "  Ejecutable : $exePath"
+if ($testExe -ne $exePath) { Write-Host "  Prueba con : $testExe" -ForegroundColor Yellow }
 if (-not $SkipConfig) { Write-Host "  Config     : $ConfigPath" }
+Write-Host "  Prueba     : $selfTestText"
+if ($selfTestStatus -eq 'pass') { Write-Host "  Archivo    : $smokeFile" }
 Write-Host ""
 Write-Host "  Siguiente paso:" -ForegroundColor White
-Write-Host "    1. Abre ETABS con un modelo cargado." -ForegroundColor Gray
-Write-Host "    2. Reinicia OpenCode (o el cliente MCP) para que cargue el servidor." -ForegroundColor Gray
+Write-Host "    1. Reinicia OpenCode (o el cliente MCP) para que cargue el servidor." -ForegroundColor Gray
+Write-Host "    2. Abre ETABS con un modelo cargado." -ForegroundColor Gray
 Write-Host "    3. Pide: 'llama a get_status' y luego 'llama a discover_api'." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Repo: https://github.com/$Repo" -ForegroundColor DarkGray

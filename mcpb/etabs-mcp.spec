@@ -50,6 +50,7 @@ a = Analysis(
         "etabs_mcp",
         "etabs_mcp.server",
         "etabs_mcp.connection",
+        "etabs_mcp.selftest",
         "etabs_mcp.sandbox",
         "etabs_mcp.sandbox.executor",
         "uvicorn",

@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.0] — 2026-10-25
+
+### Added
+- **Prueba automática de instalación** (`etabs-mcp.exe --self-test`): abre una instancia nueva de ETABS, crea un modelo de 2 pisos y 6 × 6 m (12 nodos, 16 frames), aplica carga vertical y horizontal, corre el análisis, verifica las reacciones en la base, guarda `%LOCALAPPDATA%\etabs-mcp\smoke-test\etabs-mcp-smoke.EDB` y reabre el archivo en otra instancia para confirmar que conserva la geometría. No requiere Python ni pasos manuales.
+- `install.ps1` ejecuta la prueba automáticamente al finalizar y muestra `PASS`, `FAIL` o `SKIP` con la ruta del archivo creado. Se puede omitir con `-SkipSelfTest`.
+
+### Fixed
+- La creación de un modelo desde cero ahora llama a `SapModel.InitializeNewModel` antes de `File.NewGridOnly`. Sin esa llamada, ETABS 23 devolvía `Invalid pointer` al crear un modelo desde la Start Page.
+- `install.ps1` reemplaza el `.exe` en caliente cuando hay procesos `etabs-mcp` en ejecución: renombra el binario anterior y deja el nuevo en `etabs-mcp.exe`, en vez de dejarlo como `etabs-mcp.new.exe`.
+
+### Changed
+- Versión 2.2.0 en `version.py`, `pyproject.toml` y el manifiesto `.mcpb`.
+- README actualizado con la prueba automática y el prompt de instalación por IA en dos líneas.
+- `mcpb/manifest.json`: descripción larga corregida (estaba doblemente codificada).
+
+---
+
 ## [2.1.1] — 2026-10-25
 
 Fork mantenido por David Mamani, basado en [Shekh-Muhsen/ETABS-MCP](https://github.com/Shekh-Muhsen/ETABS-MCP) v2.1.0.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "etabs-mcp"
-version = "2.1.1"
+version = "2.2.0"
 description = "MCP server for CSI ETABS via the ETABS COM API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,10 +15,6 @@ authors = [
 maintainers = [
     { name = "David Mamani" }
 ]
-
-[project.urls]
-Homepage = "https://github.com/david-mamani/etabs-mcp"
-Upstream = "https://github.com/Shekh-Muhsen/ETABS-MCP"
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -36,7 +32,12 @@ dependencies = [
     "openpyxl>=3.1,<4",
     "defusedxml>=0.7",
     "chardet>=5,<8",
+    "rank_bm25>=0.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/david-mamani/etabs-mcp"
+Upstream = "https://github.com/Shekh-Muhsen/ETABS-MCP"
 
 [project.optional-dependencies]
 dev = [
