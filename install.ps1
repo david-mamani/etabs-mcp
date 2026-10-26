@@ -233,7 +233,7 @@ if ($SkipSelfTest) {
         '@echo off',
         ('cd /d "{0}"' -f (Split-Path -Parent $testExe)),
         ('"{0}" --self-test > "{1}" 2>&1' -f $testExe, $log),
-        ('echo %ERRORLEVEL%> "{0}"' -f $codeFile)
+        ('> "{0}" echo %ERRORLEVEL%' -f $codeFile)
     ) -join "`r`n"
     [System.IO.File]::WriteAllText($runner, $runnerText, [System.Text.Encoding]::ASCII)
 
@@ -256,16 +256,20 @@ if ($SkipSelfTest) {
 
     if (Test-Path $log) { Get-Content $log | Write-Host }
 
+    $code = ''
+    if (Test-Path $codeFile) { $code = [string](Get-Content $codeFile -Raw) }
+    $code = $code.Trim()
+
     if (-not $started) {
         $selfTestStatus = 'fail'
     } elseif (-not $finished) {
         Warn "La prueba excedio 10 minutos y se cancelo."
         $selfTestStatus = 'fail'
-    } elseif ((Test-Path $codeFile) -and ((Get-Content $codeFile -Raw).Trim() -eq '0')) {
+    } elseif ($code -eq '0') {
         Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
         $selfTestStatus = 'pass'
         $etabsText = 'abierto con el modelo de prueba'
-    } elseif ((Test-Path $codeFile) -and ((Get-Content $codeFile -Raw).Trim() -eq '2')) {
+    } elseif ($code -eq '2') {
         Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
         $selfTestStatus = 'skip'
         $etabsText = 'no instalado'
