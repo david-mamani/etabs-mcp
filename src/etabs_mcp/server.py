@@ -25,6 +25,7 @@ from fastmcp.server.lifespan import lifespan
 from mcp.types import ToolAnnotations
 
 from etabs_mcp.connection import ETABSInstance, InstanceRegistry, connect_and_run
+from etabs_mcp.environment import ensure_windows_environment
 from etabs_mcp.file_io.helpers import (
     detect_input_output_collision,
     get_allowed_dirs,
@@ -572,6 +573,7 @@ def _register_tools(
 
 def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = None) -> FastMCP:
     """Create an MCP server instance with tools registered."""
+    ensure_windows_environment()
     fastmcp_kwargs = fastmcp_kwargs or {}
 
     registry = InstanceRegistry()

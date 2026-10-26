@@ -96,11 +96,15 @@ def setup_logging(log_level: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from etabs_mcp.environment import ensure_windows_environment
+
+    ensure_windows_environment()
     args = parse_args(argv)
 
     if args.prepare_model:
         from etabs_mcp.session import run_preparation_cli
 
+        setup_logging(args.log_level)
         raise SystemExit(run_preparation_cli(args.prepare_model))
 
     if args.self_test:

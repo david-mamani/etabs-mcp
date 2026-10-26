@@ -65,7 +65,9 @@ def _prepare_empty_model(
             raise FileExistsError(f"The new model path already exists: {path}")
         logger.info("Initializing an empty ETABS session for %s", path)
         _check("InitializeNewModel", model.InitializeNewModel(6))
+        logger.info("ETABS initialization completed; creating grid")
         _check("File.NewGridOnly", model.File.NewGridOnly(*grid))
+        logger.info("ETABS grid created")
         counts = [int(obj.Count()) for obj in (model.PointObj, model.FrameObj, model.AreaObj)]
         if any(counts):
             raise ProtectedModelError("The supposedly new grid contains geometry; no save or reset was attempted.")
@@ -102,6 +104,7 @@ def _run_model_preparation(pid: int, path: Path, grid: tuple, allow_existing: bo
     except (ValueError, TypeError) as exc:
         raise RuntimeError(f"Preparation helper failed: {completed.stderr[-1500:]}") from exc
     if completed.returncode or not response.get("success"):
+        logger.error("ETABS preparation helper: %s", completed.stderr[-2000:])
         error = str(response.get("error", "Preparation helper failed"))
         error_class = {
             "ProtectedModelError": ProtectedModelError, "ModelSaveError": ModelSaveError,
@@ -126,8 +129,11 @@ def run_preparation_cli(payload: str) -> int:
                 raise ValueError("Invalid preparation request")
             if not 1 <= grid[0] <= 200 or not all(0 < value <= 1000 for value in grid[1:]):
                 raise ValueError("Invalid grid parameters")
-            application = _attach_etabs(pid, timeout_s=5.0)
-            result_box[0] = _prepare_empty_model(application.SapModel, path, grid, bool(request["allow_existing"]))
+            # CSI's in-process COM helper must not load DLLs from PyInstaller's
+            # private bundle while it initializes the external application.
+            with _external_program_environment():
+                application = _attach_etabs(pid, timeout_s=5.0)
+                result_box[0] = _prepare_empty_model(application.SapModel, path, grid, bool(request["allow_existing"]))
         except Exception as exc:
             result_box[0] = exc
         finally:

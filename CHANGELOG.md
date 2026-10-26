@@ -8,6 +8,8 @@
 - Pruebas de arranque desde Start Page, reintento de `Invalid pointer`, archivos vacíos guardados, geometría sin guardar, selección de PID y exposición de la herramienta MCP.
 
 ### Fixed
+- El conector completa en su propio proceso las rutas de Windows omitidas por clientes MCP (`ProgramFiles`, `COMSPEC`, `TMP`), que impedían inicializar el modelo aunque COM pareciera conectado. Conserva las variables que el usuario ya definió.
+- La inicialización COM se ejecuta en un auxiliar del mismo ejecutable, con un hilo STA y búsqueda de DLL separada de las bibliotecas privadas de PyInstaller.
 - Las instrucciones del servidor y las guías indican cómo preparar sesiones vacías sin controlar el escritorio.
 - `execute_code` devuelve una indicación de `prepare_session` cuando no existe un modelo listo, en lugar de ejecutar código contra una sesión sin inicializar.
 - La limitación de vistas se informa con claridad: la API COM actualiza las ventanas existentes, pero su creación y distribución se realiza manualmente.
