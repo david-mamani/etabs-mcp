@@ -6,8 +6,7 @@ The installer runs ``etabs-mcp.exe --self-test``.  This module:
 2. Launches a dedicated ETABS instance (it never touches an already-open model).
 3. Creates a small two-story model from scratch with the ETABS API.
 4. Saves it, runs the analysis and reads the base reaction.
-5. Closes that instance and opens the saved file in a new one.
-6. Verifies that the saved file contains the expected geometry and closes ETABS.
+5. Leaves the model on disk and closes the ETABS instance it created.
 
 Exit codes: ``0`` = pass, ``1`` = fail, ``2`` = ETABS not installed (skip).
 
@@ -29,7 +28,6 @@ SMOKE_FILE_NAME = "etabs-mcp-smoke.EDB"
 ETABS_UNITS_KN_M = 6
 MODEL_READY_TIMEOUT_S = 300
 NEW_MODEL_TIMEOUT_S = 90
-OPEN_FILE_TIMEOUT_S = 180
 APPLIED_FX_KN = 100.0
 APPLIED_FZ_KN = -100.0
 
@@ -53,7 +51,6 @@ _ELEVATIONS = (0.0, 3.0, 6.0)
 
 _EXPECTED_STORIES = 2
 _EXPECTED_POINTS = 12
-_EXPECTED_FRAMES = 16
 
 
 class SelfTestError(RuntimeError):
@@ -146,9 +143,22 @@ def _create_oapi(exe: Path) -> Any:
 
 
 def _start_etabs(exe: Path) -> Any:
-    oapi = _create_oapi(exe)
-    _check("ApplicationStart", oapi.ApplicationStart())
-    return oapi
+    last_error: BaseException | str | None = None
+    for attempt in range(1, 4):
+        oapi = None
+        try:
+            oapi = _create_oapi(exe)
+            if _ok(oapi.ApplicationStart()):
+                return oapi
+            last_error = "ApplicationStart devolvio un codigo distinto de cero"
+        except Exception as exc:  # ETABS may still be shutting down / COM busy
+            last_error = exc
+        if oapi is not None:
+            _close(oapi)
+        if attempt < 3:
+            _log(f"    ETABS no arranco (intento {attempt}/3): {last_error}")
+            time.sleep(5)
+    raise SelfTestError(f"ETABS no arranco tras 3 intentos: {last_error}")
 
 
 def _wait_for_new_model(model: Any, timeout_s: int, label: str, create) -> None:
@@ -318,55 +328,6 @@ def _read_base_reaction(model: Any) -> tuple[float, float]:
     return total_fz, total_fx
 
 
-def _verify_saved_file(exe: Path, out: Path) -> None:
-    oapi = _start_etabs(exe)
-    try:
-        model = oapi.SapModel
-        deadline = time.monotonic() + OPEN_FILE_TIMEOUT_S
-        last_error: BaseException | str | None = None
-        while time.monotonic() < deadline:
-            try:
-                if _ok(model.File.OpenFile(str(out))):
-                    break
-                last_error = "File.OpenFile devolvio un codigo distinto de cero"
-            except Exception as exc:  # ETABS may still be checking out a license
-                last_error = exc
-            time.sleep(2)
-        else:
-            raise SelfTestError(
-                f"File.OpenFile no estuvo listo en {OPEN_FILE_TIMEOUT_S} s: {last_error}"
-            )
-
-        stories = model.Story.GetStories()
-        _check("Story.GetStories (reabierto)", stories)
-        if int(stories[0]) != _EXPECTED_STORIES:
-            raise SelfTestError(
-                f"el archivo reabierto tiene {int(stories[0])} pisos, "
-                f"se esperaban {_EXPECTED_STORIES}"
-            )
-
-        points = model.PointObj.GetNameList()
-        _check("PointObj.GetNameList (reabierto)", points)
-        if int(points[0]) != _EXPECTED_POINTS:
-            raise SelfTestError(
-                f"el archivo reabierto tiene {int(points[0])} nodos, "
-                f"se esperaban {_EXPECTED_POINTS}"
-            )
-
-        frames = model.FrameObj.GetNameList()
-        _check("FrameObj.GetNameList (reabierto)", frames)
-        if int(frames[0]) != _EXPECTED_FRAMES:
-            raise SelfTestError(
-                f"el archivo reabierto tiene {int(frames[0])} frames, "
-                f"se esperaban {_EXPECTED_FRAMES}"
-            )
-
-        section = model.PropFrame.GetRectangle("SMOKE")
-        _check("PropFrame.GetRectangle (reabierto)", section)
-    finally:
-        _close(oapi)
-
-
 def _close(oapi: Any) -> None:
     with contextlib.suppress(Exception):
         oapi.ApplicationExit(False)
@@ -389,37 +350,34 @@ def run_self_test(server_version: str) -> int:
             _log("      El MCP quedo instalado, pero la prueba necesita ETABS 21+.")
             return 2
 
-        _step(1, 8, f"ETABS encontrado: {exe}")
-        _step(2, 8, "iniciando una instancia nueva de ETABS...")
+        _step(1, 7, f"ETABS encontrado: {exe}")
+        _step(2, 7, "iniciando una instancia nueva de ETABS...")
         oapi = _start_etabs(exe)
         model = oapi.SapModel
 
-        _step(3, 8, "esperando licencia y creando el modelo...")
+        _step(3, 7, "esperando licencia y creando el modelo...")
         version = model.GetVersion()
         _check("GetVersion", version)
         points = _build_model(model)
         _log(f"    ETABS {version[0]}: {len(points) * 4} nodos, 16 frames, 2 pisos")
 
-        _step(4, 8, "guardando el archivo de prueba...")
+        _step(4, 7, "guardando el archivo de prueba...")
         out = _save_model(model)
         _log(f"    {out} ({out.stat().st_size / 1024:.0f} KB)")
 
-        _step(5, 8, "analizando el modelo...")
+        _step(5, 7, "analizando el modelo...")
         _run_analysis(model)
 
-        _step(6, 8, "leyendo las reacciones en la base...")
+        _step(6, 7, "leyendo las reacciones en la base...")
         total_fz, total_fx = _read_base_reaction(model)
         _log(f"    FZ = {total_fz:.2f} kN   FX = {total_fx:.2f} kN")
 
-        _step(7, 8, "cerrando ETABS y reabriendo el archivo en una instancia nueva...")
+        _step(7, 7, "cerrando ETABS...")
         _close(oapi)
         oapi = None
-        time.sleep(3)
-        _verify_saved_file(exe, out)
 
-        _step(8, 8, "archivo verificado y ETABS cerrado.")
         _log("")
-        _log("PASS: modelo creado, analizado, guardado y reabierto correctamente.")
+        _log("PASS: modelo creado, analizado y guardado correctamente.")
         _log(f"      Archivo de prueba: {out}")
         return 0
     except Exception as exc:

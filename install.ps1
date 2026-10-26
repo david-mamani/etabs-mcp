@@ -24,7 +24,7 @@
     Solo descarga el exe; no toca opencode.json.
 
 .PARAMETER SkipSelfTest
-    No ejecuta la prueba autonoma con ETABS (crear, analizar y reabrir un modelo).
+    No ejecuta la prueba autonoma con ETABS (crear, analizar y guardar un modelo).
 
 .EXAMPLE
     .\install.ps1 -SkipConfig
@@ -214,22 +214,26 @@ $smokeFile = Join-Path $env:LOCALAPPDATA 'etabs-mcp\smoke-test\etabs-mcp-smoke.E
 if ($SkipSelfTest) {
     Step "Prueba autonoma omitida (-SkipSelfTest)"
 } else {
-    Step "Prueba autonoma: creando, analizando y reabriendo un modelo ETABS"
+    Step "Prueba autonoma: creando y analizando un modelo ETABS"
     Write-Host "    ETABS se abre y se cierra solo; normalmente tarda 1-3 minutos..." -ForegroundColor Gray
 
     $log = Join-Path $env:TEMP ("etabs-mcp-selftest-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     $errLog = "$log.err"
     $proc = $null
+    $started = $false
     $finished = $false
     try {
         $proc = Start-Process -FilePath $testExe -ArgumentList '--self-test' -NoNewWindow -PassThru `
             -RedirectStandardOutput $log -RedirectStandardError $errLog
+        $started = $true
         $finished = $proc.WaitForExit(600000)
     } catch {
         Warn "No pude ejecutar la prueba: $($_.Exception.Message)"
     }
 
-    if (-not $finished) {
+    if (-not $started) {
+        $selfTestStatus = 'fail'
+    } elseif (-not $finished) {
         if ($proc) { try { $proc.Kill() } catch { } }
         Warn "La prueba excedio 10 minutos y se cancelo."
         if (Test-Path $log) { Get-Content $log | Write-Host }
@@ -242,14 +246,19 @@ if ($SkipSelfTest) {
             if (-not [string]::IsNullOrWhiteSpace($errText)) { Write-Host $errText -ForegroundColor DarkGray }
         }
 
-        if ($proc.ExitCode -eq 0) {
-            Ok "Prueba superada: el archivo ETABS se creo, analizo y reabrio."
+        # WaitForExit(ms) no siempre publica ExitCode; la sobrecarga sin
+        # argumentos refresca la informacion del proceso.
+        try { $proc.WaitForExit() } catch { }
+        $exitCode = $proc.ExitCode
+
+        if ($exitCode -eq 0) {
+            Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
             $selfTestStatus = 'pass'
-        } elseif ($proc.ExitCode -eq 2) {
+        } elseif ($exitCode -eq 2) {
             Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
             $selfTestStatus = 'skip'
         } else {
-            Warn "La prueba fallo (exit $($proc.ExitCode)). El MCP quedo instalado igual."
+            Warn "La prueba fallo (exit $exitCode). El MCP quedo instalado igual."
             $selfTestStatus = 'fail'
         }
     }
@@ -260,7 +269,7 @@ if ($SkipSelfTest) {
 # ---- 6. Resumen --------------------------------------------------------------
 Step "Listo"
 $selfTestText = if ($selfTestStatus -eq 'pass') {
-    'PASS - modelo ETABS creado y reabierto'
+    'PASS - modelo ETABS creado y analizado'
 } elseif ($selfTestStatus -eq 'skip') {
     'SKIP - ETABS no instalado'
 } elseif ($selfTestStatus -eq 'fail') {

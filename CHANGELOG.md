@@ -3,7 +3,7 @@
 ## [2.2.0] — 2026-10-25
 
 ### Added
-- **Prueba automática de instalación** (`etabs-mcp.exe --self-test`): abre una instancia nueva de ETABS, crea un modelo de 2 pisos y 6 × 6 m (12 nodos, 16 frames), aplica carga vertical y horizontal, corre el análisis, verifica las reacciones en la base, guarda `%LOCALAPPDATA%\etabs-mcp\smoke-test\etabs-mcp-smoke.EDB` y reabre el archivo en otra instancia para confirmar que conserva la geometría. No requiere Python ni pasos manuales.
+- **Prueba automática de instalación** (`etabs-mcp.exe --self-test`): abre una instancia nueva de ETABS, crea un modelo de 2 pisos y 6 × 6 m (12 nodos, 16 frames), aplica carga vertical y horizontal, corre el análisis, verifica las reacciones en la base, guarda `%LOCALAPPDATA%\etabs-mcp\smoke-test\etabs-mcp-smoke.EDB` y cierra ETABS al terminar. No requiere Python ni pasos manuales.
 - `install.ps1` ejecuta la prueba automáticamente al finalizar y muestra `PASS`, `FAIL` o `SKIP` con la ruta del archivo creado. Se puede omitir con `-SkipSelfTest`.
 
 ### Fixed
