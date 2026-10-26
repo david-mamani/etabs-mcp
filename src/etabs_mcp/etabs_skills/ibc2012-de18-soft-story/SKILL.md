@@ -229,7 +229,7 @@ ret = model.PropMaterial.SetWeightAndMass("C30", 1, 25.0)
 ret = model.PropFrame.SetRectangle("COL600", "C30", 0.6, 0.6)   # story 1
 ret = model.PropFrame.SetRectangle("COL500", "C30", 0.5, 0.5)   # stories 2-5
 ret = model.PropFrame.SetRectangle("BM400x600", "C30", 0.6, 0.4)
-ret = model.PropArea.SetSlab("SLAB150", 0, 0, "C30", 0.15)
+ret = model.PropArea.SetSlab("SLAB150", 0, 1, "C30", 0.15)
 
 # Grid
 X = [0, 6, 12, 18, 24]   # 4 bays × 6m
@@ -254,7 +254,7 @@ for iz in range(5):
     sec = "COL600" if iz == 0 else "COL500"
     for iy in range(5):
         for ix in range(5):
-            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], sec)
+            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "", sec)
 
 # Force-assign sections
 tl = model.FrameObj.GetNameList()
@@ -276,11 +276,11 @@ for iz in range(5):
 for iz in range(1, 6):
     for iy in range(5):
         for ix in range(4):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "BM400x600")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "", "BM400x600")
             model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
     for iy in range(4):
         for ix in range(5):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "BM400x600")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "", "BM400x600")
             model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 
 # Slabs
@@ -289,7 +289,7 @@ for iz in range(1, 6):
         for ix in range(4):
             pts = [nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)],
                    nodes[(ix+1,iy+1,iz)], nodes[(ix,iy+1,iz)]]
-            model.AreaObj.AddByPoint(4, pts, "SLAB150")
+            model.AreaObj.AddByPoint(4, pts, "", "SLAB150")
 
 # ELF loads — triangular distribution
 # Cs = 0.10, W_floor = 25×(24^2)×0.15 = 2160 kN per floor, W_total = 10800 kN

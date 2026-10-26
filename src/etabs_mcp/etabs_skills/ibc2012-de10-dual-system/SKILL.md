@@ -96,7 +96,7 @@ ret = model.PropFrame.SetRectangle("BM18x30", "C5000", 18, 30)
 ```python
 # RC shear wall: 12 in thick
 ret = model.PropArea.SetWall(
-    "SW12", 1, 0,          # 1=specified, 0=uniform
+    "SW12", 1, 1,          # 1=specified, 0=uniform
     "C5000", 12            # 12 in thick
 )
 ```

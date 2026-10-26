@@ -96,7 +96,7 @@ for iz in range(3):
     for iy in range(3):
         for ix in range(5):
             sec = "COL500" if iy == 0 else "COL350"
-            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], sec)
+            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "", sec)
 ```
 
 > ⚠️ **ETABS 23 quirk:** `AddByPoint` may NOT apply the section name if the section was just overwritten with `SetRectangle`. Always verify with `GetSection` after adding, and use `SetSection` to force-assign if needed (see Step 3b).
@@ -134,13 +134,13 @@ print(model.FrameObj.GetSection(flex)[0])    # → COL350
 for iz in range(1, 4):
     for iy in range(3):          # X-direction
         for ix in range(4):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "BM300x500")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "", "BM300x500")
             model.FrameObj.SetReleases(t[0],
                 [False,False,False,False,True,True],
                 [False,False,False,False,True,True])
     for iy in range(2):          # Y-direction
         for ix in range(5):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "BM300x500")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "", "BM300x500")
             model.FrameObj.SetReleases(t[0],
                 [False,False,False,False,True,True],
                 [False,False,False,False,True,True])

@@ -78,7 +78,7 @@ ret = model.PropMaterial.SetWeightAndMass("C30", 1, 25.0)
 
 ret = model.PropFrame.SetRectangle("COL400",    "C30", 0.4, 0.4)
 ret = model.PropFrame.SetRectangle("BM300x400", "C30", 0.4, 0.3)
-ret = model.PropArea.SetSlab("SLAB150", 0, 0, "C30", 0.15)
+ret = model.PropArea.SetSlab("SLAB150", 0, 1, "C30", 0.15)
 ```
 
 ## Step 2 — Grid and Nodes
@@ -107,7 +107,7 @@ for iy in range(6):
 for iz in range(5):
     for iy in range(6):
         for ix in range(5):
-            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "COL400")
+            model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "", "COL400")
 
 # Force-assign sections (ETABS 23 quirk — AddByPoint may not apply section)
 tl = model.FrameObj.GetNameList()
@@ -132,12 +132,12 @@ for iz in range(1, 6):
     # X-direction beams
     for iy in range(6):
         for ix in range(4):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "BM300x400")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "", "BM300x400")
             model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
     # Y-direction beams
     for iy in range(5):
         for ix in range(5):
-            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "BM300x400")
+            t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "", "BM300x400")
             model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 ```
 
@@ -158,7 +158,7 @@ for iz in range(1, 6):
                     nodes[(ix+1, iy+1, iz)],
                     nodes[(ix,   iy+1, iz)],
                 ]
-                model.AreaObj.AddByPoint(4, pts, "SLAB150")
+                model.AreaObj.AddByPoint(4, pts, "", "SLAB150")
 # Note: AreaObj.AddByPoint returns area name at t[1], not t[0]
 ```
 
@@ -168,23 +168,23 @@ for iz in range(1, 6):
 # Atrium edge beams — frame around the void perimeter at iz=1
 # Bottom edge Y=7.5m (iy=1): X from 6 to 18m
 for ix in (1, 2):
-    t = model.FrameObj.AddByPoint(nodes[(ix,1,1)], nodes[(ix+1,1,1)], "BM300x400")
+    t = model.FrameObj.AddByPoint(nodes[(ix,1,1)], nodes[(ix+1,1,1)], "", "BM300x400")
     model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 # Top edge Y=30m (iy=4): X from 6 to 18m
 for ix in (1, 2):
-    t = model.FrameObj.AddByPoint(nodes[(ix,4,1)], nodes[(ix+1,4,1)], "BM300x400")
+    t = model.FrameObj.AddByPoint(nodes[(ix,4,1)], nodes[(ix+1,4,1)], "", "BM300x400")
     model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 # Left edge X=6m (ix=1): Y from 7.5 to 30m
 for iy in (1, 2, 3):
-    t = model.FrameObj.AddByPoint(nodes[(1,iy,1)], nodes[(1,iy+1,1)], "BM300x400")
+    t = model.FrameObj.AddByPoint(nodes[(1,iy,1)], nodes[(1,iy+1,1)], "", "BM300x400")
     model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 # Right edge X=18m (ix=3): Y from 7.5 to 30m
 for iy in (1, 2, 3):
-    t = model.FrameObj.AddByPoint(nodes[(3,iy,1)], nodes[(3,iy+1,1)], "BM300x400")
+    t = model.FrameObj.AddByPoint(nodes[(3,iy,1)], nodes[(3,iy+1,1)], "", "BM300x400")
     model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 # Interior stabilization beams through atrium void at X=12m (ix=2)
 for iy in (1, 2, 3):
-    t = model.FrameObj.AddByPoint(nodes[(2,iy,1)], nodes[(2,iy+1,1)], "BM300x400")
+    t = model.FrameObj.AddByPoint(nodes[(2,iy,1)], nodes[(2,iy+1,1)], "", "BM300x400")
     model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 ```
 
@@ -445,8 +445,8 @@ Note: w cancels — only the RATIO matters, not the absolute load value.
 ## Key Implementation Notes (Verified ETABS 23.2)
 
 - **NEVER call `InitializeNewModel()`** — blanks the ETABS window permanently
-- `AreaObj.AddByPoint(4, pts, sec)` returns area name at `t[1]`, NOT `t[0]` (see DE 11 note)
-- `FrameObj.AddByPoint` may not apply section — always follow with `SetSection` loop (see DE 12 note)
+- `AreaObj.AddByPoint(4, pts, "", sec)` returns area name at `t[1]`, NOT `t[0]` (see DE 11 note)
+- `FrameObj.AddByPoint` requires an empty `Name` before `PropName`; verify the section with `GetSection`
 - Atrium edge beams and interior stabilization beams are REQUIRED on floor 2 — without them, atrium boundary nodes float free (no slab, no beams) and produce garbage U1 values (~1e16 mm)
 - Rebuild `nodes` dict from `model.PointObj.GetNameList()` in EVERY execute_code call — Python state is NOT shared between calls
 - Unit 6 = kN_m; call `model.SetPresentUnits(6)` at top of each execute_code block

@@ -1,7 +1,5 @@
 """Unit tests for the ETABS MCP sandbox."""
 
-import pytest
-
 from etabs_mcp.sandbox.ast import capture_last_expr, validate_code
 from etabs_mcp.sandbox.executor import Executor
 

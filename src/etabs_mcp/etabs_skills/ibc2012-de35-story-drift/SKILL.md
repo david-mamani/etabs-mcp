@@ -156,13 +156,13 @@ for i, z in enumerate(story_heights):
 # Columns
 for i in range(4):  # 4 stories
     for j in range(6):  # 6 column lines
-        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i+1,j)], f"COL_{i}_{j}")
+        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i+1,j)], "", f"COL_{i}_{j}")
         SapModel.FrameObj.SetSection(f"COL_{i}_{j}", "COL_1")
 
 # Beams
 for i in range(1, 5):  # levels 1-4
     for j in range(5):  # 5 bays
-        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i,j+1)], f"BM_{i}_{j}")
+        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i,j+1)], "", f"BM_{i}_{j}")
         SapModel.FrameObj.SetSection(f"BM_{i}_{j}", "BEAM_1")
 
 # Fixed bases

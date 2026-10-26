@@ -88,7 +88,7 @@ ret = model.PropFrame.SetRectangle("COL350",   "C30", 0.35, 0.35) # interior gra
 ret = model.PropFrame.SetRectangle("BM300x600","C30", 0.6, 0.3)   # all beams
 
 # 125mm slab — ShellThin, NO diaphragm constraint assigned later
-ret = model.PropArea.SetSlab("SLAB125", 0, 0, "C30", 0.125)
+ret = model.PropArea.SetSlab("SLAB125", 0, 1, "C30", 0.125)
 ```
 
 ## Step 3 — Grid and Nodes
@@ -119,7 +119,7 @@ for iz in range(3):
     for iy in range(3):
         for ix in range(5):
             sec = "COL500" if ix in (0, 4) else "COL350"
-            model.FrameObj.AddByPoint(nodes[(ix, iy, iz)], nodes[(ix, iy, iz+1)], sec)
+            model.FrameObj.AddByPoint(nodes[(ix, iy, iz)], nodes[(ix, iy, iz+1)], "", sec)
 ```
 
 ## Step 5 — Beams
@@ -129,7 +129,7 @@ for iz in range(1, 4):
     for iy in range(3):
         for ix in range(4):   # X-direction beams
             t = model.FrameObj.AddByPoint(
-                nodes[(ix, iy, iz)], nodes[(ix+1, iy, iz)], "BM300x600"
+                nodes[(ix, iy, iz)], nodes[(ix+1, iy, iz)], "", "BM300x600"
             )
             fn = t[0]
             if ix not in (0, 3):   # interior spans: pin (gravity only)
@@ -140,7 +140,7 @@ for iz in range(1, 4):
     for iy in range(2):
         for ix in range(5):   # Y-direction beams: all gravity pinned
             t = model.FrameObj.AddByPoint(
-                nodes[(ix, iy, iz)], nodes[(ix, iy+1, iz)], "BM300x600"
+                nodes[(ix, iy, iz)], nodes[(ix, iy+1, iz)], "", "BM300x600"
             )
             model.FrameObj.SetReleases(t[0],
                 [False,False,False,False,True,True],
@@ -161,7 +161,7 @@ for iz in range(1, 4):
                 nodes[(ix+1, iy+1, iz)],
                 nodes[(ix,   iy+1, iz)],
             ]
-            t = model.AreaObj.AddByPoint(4, pts, "SLAB125")
+            t = model.AreaObj.AddByPoint(4, pts, "", "SLAB125")
             # area_name = t[1]   ← NOT t[0]
 ```
 
@@ -256,7 +256,7 @@ MFAD/AVSD ≪ 2.0 → **All floors: Rigid Diaphragm** per §12.3.1.3.
 
 ## Key Implementation Notes (Verified)
 
-- `AreaObj.AddByPoint(4, pts, sec)` → area name is at `t[1]`, NOT `t[0]`
+- `AreaObj.AddByPoint(4, pts, "", sec)` → area name is at `t[1]`, NOT `t[0]`
 - `PropArea.SetSlab("SLAB125", 0, 0, "C30", 0.125)` — ShellType 0 = ShellThin ✓
 - `PropArea.SetShell_1()` does NOT exist in ETABS 23 — use `SetSlab` ✓
 - `Results.JointDispl(pt, 0, 0)` → `r[6]` = U1 tuple (index 6, not 3) ✓

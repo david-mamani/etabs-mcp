@@ -228,11 +228,12 @@ if ($SkipSelfTest) {
     $log = Join-Path $work 'selftest.log'
     $runner = Join-Path $work 'run.cmd'
     $codeFile = Join-Path $work 'exit.txt'
+    $reportFile = Join-Path $work 'selftest.json'
 
     $runnerText = @(
         '@echo off',
         ('cd /d "{0}"' -f (Split-Path -Parent $testExe)),
-        ('"{0}" --self-test > "{1}" 2>&1' -f $testExe, $log),
+        ('"{0}" --self-test --self-test-report "{1}" > "{2}" 2>&1' -f $testExe, $reportFile, $log),
         ('> "{0}" echo %ERRORLEVEL%' -f $codeFile)
     ) -join "`r`n"
     [System.IO.File]::WriteAllText($runner, $runnerText, [System.Text.Encoding]::ASCII)
@@ -266,9 +267,20 @@ if ($SkipSelfTest) {
         Warn "La prueba excedio 10 minutos y se cancelo."
         $selfTestStatus = 'fail'
     } elseif ($code -eq '0') {
-        Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
-        $selfTestStatus = 'pass'
-        $etabsText = 'abierto con el modelo de prueba'
+        try {
+            $testReport = Get-Content -LiteralPath $reportFile -Raw | ConvertFrom-Json
+            if (-not $testReport.success -or -not $testReport.pid -or -not $testReport.model_path) {
+                throw 'El informe no identifica el PID y el archivo de prueba.'
+            }
+            $smokeFile = [string]$testReport.model_path
+            $smokePid = [int]$testReport.pid
+            Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
+            $selfTestStatus = 'pass'
+            $etabsText = 'abierto con el modelo de prueba'
+        } catch {
+            Warn "No pude validar el informe de la prueba: $($_.Exception.Message)"
+            $selfTestStatus = 'fail'
+        }
     } elseif ($code -eq '2') {
         Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
         $selfTestStatus = 'skip'
@@ -278,13 +290,18 @@ if ($SkipSelfTest) {
         $selfTestStatus = 'fail'
     }
 
-    Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+    # No borrar rutas calculadas fuera de la carpeta temporal de esta prueba.
+    $resolvedWork = [System.IO.Path]::GetFullPath($work)
+    $expectedWork = [System.IO.Path]::GetFullPath((Join-Path $env:TEMP ("etabs-mcp-selftest-{0}" -f $PID)))
+    if ($resolvedWork -eq $expectedWork) {
+        Remove-Item -LiteralPath $resolvedWork -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---- 6. Comprobacion del conector MCP ----------------------------------------
 if ($selfTestStatus -eq 'pass') {
     Step "Comprobando el conector MCP contra ETABS"
-    $statusOutput = & $testExe --status 2>&1
+    $statusOutput = & $testExe --status --pid $smokePid --expected-model $smokeFile 2>&1
     $statusExit = $LASTEXITCODE
     if ($statusOutput) { $statusOutput | Write-Host }
     if ($statusExit -eq 0) {

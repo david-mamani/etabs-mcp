@@ -199,8 +199,12 @@ ret = model.File.Save("C:\\Projects\\building_v2.edb")
 # Open an existing file (model must be unlocked first)
 ret = model.File.OpenFile("C:\\Projects\\building.edb")
 
-# ⛔ NEVER call InitializeNewModel() — permanently blanks the ETABS viewport UI.
-# To start fresh, clear geometry instead:
+# InitializeNewModel resets the model. Use it only on a dedicated new instance
+# or when the user explicitly requests a complete reset. A new ETABS Start Page
+# needs InitializeNewModel before File.NewGridOnly (validated in ETABS 23.3.2).
+# NewGridOnly alone may preserve old objects: verify PointObj/FrameObj/AreaObj
+# counts before building. Do not reset a loaded user model automatically.
+# To clear ONLY geometry when requested, preserve definitions with:
 model.SetModelIsLocked(False)
 model.SelectObj.All()
 model.FrameObj.Delete("", 2)              # delete all frames

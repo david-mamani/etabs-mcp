@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.2.2] — 2026-10-25
+
+### Fixed
+- El ejecutable compilado limpia temporalmente la búsqueda de bibliotecas de PyInstaller al abrir programas de Windows. ETABS ya no hereda las DLL privadas del servidor durante la prueba.
+- La prueba inicial usa un único hilo con COM inicializado de forma explícita. El diagnóstico trata `(Untitled)` como un modelo sin guardar y no como un archivo cargado.
+- Descubrimiento de todos los procesos reales de ETABS. El servidor MCP ya no se confunde con `ETABS.exe`. La enumeración usa nombres exactos y handles de Windows de 64 bits.
+- Conexión estricta al PID seleccionado con `GetObjectProcess`. Una instancia no disponible no cambia el destino a otra ventana. Los alias cerrados no se reutilizan.
+- Diagnóstico con PID, `connected`, `model_ready`, `model_empty` y `model_state`. El instalador comprueba el mismo PID y archivo que creó la prueba, incluido un nombre de archivo alternativo.
+- Recuperación del reinicio por autenticación durante el arranque de la prueba. Solo se acepta una instancia nueva y vacía; nunca se inicializa un modelo existente.
+- Las 16 barras de la prueba reciben la sección `SMOKE`. Se confirma cada asignación con `GetSection` antes del análisis.
+- Índice regenerado desde la biblioteca de tipos de ETABS 23.3.2. Conserva los parámetros de entrada/salida y su orden. La documentación CHM solo aporta descripciones y no sustituye las firmas oficiales.
+- Valores de losas y muros corregidos: `ShellThin=1`, `ShellThick=2`, `Membrane=3`, `Specified=1`. Ejemplos de creación de barras y áreas corregidos en todas las guías afectadas.
+
+### Added
+- Referencias de contratos y enumeraciones generadas con versión y SHA-256 de la biblioteca de tipos.
+- Pruebas de regresión de selección, diagnóstico, autenticación, secciones y llamadas MCP. Comprobaciones automáticas en Windows y Linux.
+
+
 ## [2.2.1] — 2026-10-25
 
 ### Changed

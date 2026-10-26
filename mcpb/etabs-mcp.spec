@@ -37,6 +37,9 @@ if skills_dir.exists():
 api_index = ROOT / "src" / "etabs_mcp" / "etabs_api_index.json"
 if api_index.exists():
     skills_data.append((str(api_index), "etabs_mcp"))
+api_metadata = ROOT / "src" / "etabs_mcp" / "etabs_api_metadata.json"
+if api_metadata.exists():
+    skills_data.append((str(api_metadata), "etabs_mcp"))
 
 # Include fastmcp distribution metadata (needed at runtime for version resolution)
 package_metadata = copy_metadata("fastmcp")

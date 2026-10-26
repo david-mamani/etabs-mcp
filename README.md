@@ -1,6 +1,6 @@
 # ETABS MCP Server
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.2.2-blue)](./CHANGELOG.md)
 [![ETABS](https://img.shields.io/badge/ETABS-21%2B-orange)](#requisitos)
 [![Platform](https://img.shields.io/badge/plataforma-Windows-lightgrey)](#requisitos)
 [![License](https://img.shields.io/badge/licencia-MIT-green)](./LICENSE)
@@ -67,11 +67,12 @@ Al terminar, el instalador ejecuta `etabs-mcp.exe --self-test`. Esa prueba:
 
 - Abre una instancia **nueva** de ETABS (no toca un modelo que ya tengas abierto).
 - Crea un modelo de 2 pisos, 12 nodos y 16 frames (columnas y vigas de 6 × 6 m).
+- Asigna la sección rectangular `SMOKE` de 0.40 × 0.40 m a las 16 barras y confirma cada asignación.
 - Aplica una carga vertical y una horizontal, corre el análisis y verifica las reacciones en la base.
 - Guarda el archivo en `%LOCALAPPDATA%\etabs-mcp\smoke-test\etabs-mcp-smoke.EDB`.
 - Deja ETABS abierto con el modelo de prueba.
 
-Después ejecuta `etabs-mcp.exe --status`, que se conecta a ese ETABS por el mismo camino que usa el servidor MCP. El resultado se imprime como `PASS`, `FAIL` o `SKIP` (si ETABS no está instalado), con una línea `MCP` y otra `ETABS`. El archivo de prueba queda en disco para que lo abras cuando quieras. También puedes correrlo a mano:
+Después ejecuta `etabs-mcp.exe --status --pid <PID> --expected-model <archivo>`, con los datos del informe JSON de la prueba. Comprueba el mismo proceso y archivo por el camino que usa el servidor MCP. El resultado se imprime como `PASS`, `FAIL` o `SKIP` (si ETABS no está instalado), con una línea `MCP` y otra `ETABS`. El archivo de prueba queda en disco para que lo abras cuando quieras. También puedes correrlo a mano:
 
 ```powershell
 & "$env:LOCALAPPDATA\etabs-mcp\etabs-mcp.exe" --self-test
@@ -141,7 +142,7 @@ En Claude Desktop (`claude_desktop_config.json`), el mismo binario en modo `stdi
 }
 ```
 
-Reinicia el cliente y verifica con la herramienta `get_status`.
+Reinicia el cliente y llama a `list_instances`. Si hay varias ventanas, pasa el alias elegido a `get_status` y `execute_code`. Cada alias conserva su PID; una conexión fallida nunca selecciona otra ventana.
 
 ### Opción C — Desde código fuente
 
@@ -184,7 +185,7 @@ etabs-mcp --allowed-dirs "C:\Proyectos\Edificio" "C:\Export"
 | `list_instances` | Instancias de ETABS abiertas (alias, PID, archivo, versión). |
 | `get_status` | Estado de la conexión, versión de ETABS, si el modelo está bloqueado, versión del servidor. |
 | `execute_code` | Ejecuta Python en un sandbox contra el `SapModel` conectado. |
-| `search_docs` | Búsqueda BM25 sobre **2 458 métodos** de la API de ETABS. |
+| `search_docs` | Búsqueda BM25 sobre **1 407 métodos y propiedades** de la API de ETABS. |
 
 **Sandbox:** el código corre restringido — sin `import`, sin acceso al sistema de archivos, sin shell. Solo están disponibles `model` (`SapModel`), `json` y `math`. Todo el procesamiento es local; no se envía nada a la nube.
 
@@ -255,7 +256,7 @@ src/etabs_mcp/
   sandbox/executor.py      ← sandbox de Python restringido
   file_io/                 ← helpers CSV/XLSX y validación de rutas
   etabs_skills/            ← 47 skills en Markdown
-  etabs_api_index.json     ← índice de 2 458 métodos de la API
+  etabs_api_index.json     ← índice de 1 407 métodos y propiedades de la API
 mcpb/
   etabs-mcp.spec           ← spec de PyInstaller
   manifest.json            ← manifiesto del paquete .mcpb
@@ -295,3 +296,21 @@ py build_api_index_typelib.py --merge
 ## Licencia
 
 MIT — ver [LICENSE](./LICENSE). Puedes usarlo, modificarlo y redistribuirlo conservando el aviso de copyright original.
+
+## Diagnóstico y contratos de la API
+
+`list_instances` enumera los PID reales, incluidos procesos en la pantalla de inicio o sin conexión disponible. No incluye `etabs-mcp.exe`.
+
+`get_status` devuelve `connected` para la conexión COM y `model_ready` para un modelo legible con archivo o geometría. `model_state` distingue `loaded`, `unsaved`, `empty` y `unavailable`. `model_empty` indica si no hay nodos, barras ni áreas. Un modelo vacío puede recibir instrucciones de creación mediante `execute_code`; el diagnóstico no bloquea esa operación.
+
+Con varias instancias, selecciona un alias explícito. Desde la terminal puedes usar `etabs-mcp --status --pid 1234 --expected-model "C:\Proyectos\modelo.edb"`. El archivo de trabajo `.$et` se acepta solo si coincide la carpeta y el nombre del `.edb` esperado.
+
+La prueba inicial espera hasta cinco minutos si ETABS solicita iniciar sesión. Completa la autenticación manualmente. Si ETABS se reinicia, la prueba solo acepta un nuevo proceso vacío y falla si la selección es ambigua.
+
+El índice y los valores de enumeración se validaron con la biblioteca de tipos de ETABS **23.3.2**. Para regenerarlos y actualizar las referencias de las guías:
+
+```powershell
+python build_api_index_typelib.py --etabs-version 23.3.2 --update-guides
+```
+
+El archivo `src/etabs_mcp/etabs_api_metadata.json` registra la versión, el SHA-256 de la biblioteca y las enumeraciones. Los parámetros `inout` aparecen tanto en los argumentos como en la respuesta. En creación de barras o áreas, conserva `Name=""` antes de `PropName`. `AreaObj.AddByCoord` devuelve las coordenadas, el nombre del área y el código de retorno: usa `respuesta[-2]` para el nombre.

@@ -2,7 +2,7 @@
     "manifest_version":  "0.4",
     "name":  "etabs-mcp",
     "display_name":  "ETABS MCP Server",
-    "version":  "2.2.1",
+    "version":  "2.2.2",
     "description":  "MCP server for CSI ETABS via the ETABS COM API",
     "long_description":  "Servidor MCP para CSI ETABS mediante la API COM oficial. Permite crear y modificar modelos, definir cargas, ejecutar el analisis, extraer resultados y correr diseno estructural desde un agente de IA. Incluye 47 skills y ejecucion de codigo en sandbox.",
     "author":  {

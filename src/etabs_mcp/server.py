@@ -33,6 +33,7 @@ from etabs_mcp.file_io.helpers import (
 from etabs_mcp.file_io.path_validator import FileIOError
 from etabs_mcp.sandbox.executor import Executor
 from etabs_mcp.skills import SkillsManager
+from etabs_mcp.status import read_model_status
 from etabs_mcp.version import SERVER_VERSION, check_version_warning
 
 logger = logging.getLogger(__name__)
@@ -230,7 +231,7 @@ def _register_tools(
         if pid is None:
             alive = [i.alias for i in instances]
             raise ValueError(f"{instance!r} is unknown. Available: {alive}")
-        matches = [i for i in instances if i.pid == pid]
+        matches = [i for i in instances if i.alias == instance and i.pid == pid]
         if not matches:
             alive = [i.alias for i in instances]
             raise ValueError(f"{instance!r} is no longer running. Available: {alive}")
@@ -313,39 +314,12 @@ def _register_tools(
         try:
             target = _resolve_target(instance)
         except ValueError as e:
-            return {"connected": False, "error": str(e)}
+            return {"connected": False, "model_ready": False, "error": str(e)}
 
         def _read_status(model: Any) -> dict[str, Any]:
-            try:
-                ver_result = model.GetVersion()
-                # GetVersion() returns [VersionString, BuildNum, ret] — index 0 is the version
-                if isinstance(ver_result, (list, tuple)):
-                    version = str(ver_result[0]) if ver_result else "unknown"
-                else:
-                    version = str(ver_result)
-            except Exception:
-                version = "unknown"
-
-            try:
-                file_path = model.GetModelFilename(True)
-            except Exception:
-                file_path = None
-
-            try:
-                # Check if analysis is running (lock state)
-                locked = bool(model.GetModelIsLocked())
-            except Exception:
-                locked = False
-
-            result: dict[str, Any] = {
-                "connected": True,
-                "server_version": SERVER_VERSION,
-                "etabs_version": version,
-                "model_path": file_path,
-                "alias": target.alias,
-                "model_locked": locked,
-            }
-            warning = check_version_warning(version)
+            result = read_model_status(model)
+            result.update(server_version=SERVER_VERSION, alias=target.alias, pid=target.pid)
+            warning = check_version_warning(result["etabs_version"])
             if warning:
                 result["warning"] = warning
             return result
@@ -353,9 +327,11 @@ def _register_tools(
         try:
             return connect_and_run(_read_status, target.pid, timeout=10.0)
         except TimeoutError:
-            return {"connected": False, "error": "Connection timed out"}
+            return {"connected": False, "model_ready": False, "alias": target.alias,
+                    "pid": target.pid, "error": f"{target.alias} (PID {target.pid}): connection timed out"}
         except Exception as e:
-            return {"connected": False, "error": str(e)}
+            return {"connected": False, "model_ready": False, "alias": target.alias,
+                    "pid": target.pid, "error": f"{target.alias} (PID {target.pid}): {e}"}
 
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -434,7 +410,7 @@ def _register_tools(
                 "result": None,
                 "stdout": "",
                 "stderr": "",
-                "error": "Code execution timed out",
+                "error": f"{target.alias} (PID {target.pid}): code execution timed out",
                 "duration_seconds": 0.0,
             }
         except Exception as e:
@@ -443,7 +419,7 @@ def _register_tools(
                 "result": None,
                 "stdout": "",
                 "stderr": "",
-                "error": str(e),
+                "error": f"{target.alias} (PID {target.pid}): {e}",
                 "duration_seconds": 0.0,
             }
 

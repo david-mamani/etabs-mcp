@@ -175,7 +175,7 @@ for wall in ["A", "B"]:
     for iz in range(n_stories):
         pts = [nodes[(wall,"L",iz)],  nodes[(wall,"R",iz)],
                nodes[(wall,"R",iz+1)], nodes[(wall,"L",iz+1)]]
-        model.AreaObj.AddByPoint(4, pts, "WALL300")
+        model.AreaObj.AddByPoint(4, pts, "", "WALL300")
 ```
 
 ## Step B4 — Rigid Diaphragm at Each Floor Level
