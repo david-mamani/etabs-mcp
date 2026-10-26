@@ -94,6 +94,12 @@ def _version_key(name: str) -> tuple[int, ...]:
     return tuple(int(n) for n in numbers) if numbers else (0,)
 
 
+def _standard_program_files() -> list[Path]:
+    """MCP clients may omit ProgramFiles from the child environment."""
+    system_drive = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")).parent
+    return [system_drive / "Program Files", system_drive / "Program Files (x86)"]
+
+
 def find_etabs_exe() -> Path | None:
     """Return the newest ``ETABS.exe`` found under Program Files, if any."""
     roots = []
@@ -101,6 +107,8 @@ def find_etabs_exe() -> Path | None:
         root = os.environ.get(env_name)
         if root:
             roots.append(Path(root) / "Computers and Structures")
+    if sys.platform == "win32":
+        roots.extend(root / "Computers and Structures" for root in _standard_program_files())
 
     candidates: list[tuple[tuple[int, ...], Path]] = []
     seen: set[str] = set()
@@ -185,7 +193,7 @@ def _etabs_pids() -> set[int]:
     return pids
 
 
-def _launch_etabs(exe: Path) -> int:
+def _launch_etabs(exe: Path, timeout_s: float = ETABS_LAUNCH_TIMEOUT_S) -> int:
     """Start ETABS detached from this process and return its PID.
 
     ``explorer.exe`` starts ETABS from the already-running Windows shell.  A
@@ -200,7 +208,7 @@ def _launch_etabs(exe: Path) -> int:
     except OSError as exc:
         raise SelfTestError(f"no pude abrir ETABS: {exc}") from exc
 
-    deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
+    deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         new_pids = _etabs_pids() - before
         if len(new_pids) > 1:
@@ -208,7 +216,7 @@ def _launch_etabs(exe: Path) -> int:
         if new_pids:
             return new_pids.pop()
         time.sleep(1)
-    raise SelfTestError(f"ETABS no aparecio en {ETABS_LAUNCH_TIMEOUT_S} s")
+    raise SelfTestError(f"ETABS no aparecio en {timeout_s} s")
 
 
 def _attach_etabs(pid: int, timeout_s: float = ETABS_LAUNCH_TIMEOUT_S) -> Any:

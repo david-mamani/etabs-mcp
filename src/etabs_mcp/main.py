@@ -26,6 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--pid", type=int, help="[status] Exact ETABS process ID to check")
     parser.add_argument("--expected-model", help="[status] Require this exact model file")
     parser.add_argument("--self-test-report", help="[self-test] Write the test PID and model path as JSON")
+    parser.add_argument("--prepare-model", help="[internal] Prepare an empty ETABS model from a JSON request")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
@@ -95,7 +96,16 @@ def setup_logging(log_level: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from etabs_mcp.environment import ensure_windows_environment
+
+    ensure_windows_environment()
     args = parse_args(argv)
+
+    if args.prepare_model:
+        from etabs_mcp.session import run_preparation_cli
+
+        setup_logging(args.log_level)
+        raise SystemExit(run_preparation_cli(args.prepare_model))
 
     if args.self_test:
         from etabs_mcp.selftest import run_self_test

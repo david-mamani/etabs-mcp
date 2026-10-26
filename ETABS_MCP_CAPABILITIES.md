@@ -2,6 +2,11 @@
 
 A reference guide for engineers using Claude + ETABS MCP to interrogate and control ETABS models.
 
+`prepare_session` can open ETABS and create a saved, unique working model without
+desktop automation. Use `new_model=True` for a separate new project. Modelling and
+analysis use COM; arranging plan/elevation windows remains manual because the
+ETABS 23.3.2 View API only refreshes existing windows.
+
 ---
 
 ## 1. MODEL INFORMATION

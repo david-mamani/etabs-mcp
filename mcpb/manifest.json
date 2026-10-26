@@ -2,7 +2,7 @@
     "manifest_version":  "0.4",
     "name":  "etabs-mcp",
     "display_name":  "ETABS MCP Server",
-    "version":  "2.2.2",
+    "version":  "2.2.3",
     "description":  "MCP server for CSI ETABS via the ETABS COM API",
     "long_description":  "Servidor MCP para CSI ETABS mediante la API COM oficial. Permite crear y modificar modelos, definir cargas, ejecutar el analisis, extraer resultados y correr diseno estructural desde un agente de IA. Incluye 47 skills y ejecucion de codigo en sandbox.",
     "author":  {
@@ -34,6 +34,14 @@
                   {
                       "name":  "get_status",
                       "description":  "Check the connection to ETABS. Returns connection state, version, model path, and lock status."
+                  },
+                  {
+                      "name": "prepare_session",
+                      "description": "Open ETABS and prepare a saved empty model through COM without computer-use. New models use a separate ETABS process and a unique file."
+                  },
+                  {
+                      "name": "search_docs",
+                      "description": "Search the installed ETABS API contracts and Python calling conventions."
                   },
                   {
                       "name":  "execute_code",

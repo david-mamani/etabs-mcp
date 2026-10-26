@@ -6,6 +6,7 @@ Exposes MCP tools:
 - ``read_skills``     — returns requested skill content
 - ``list_instances``  — lists running ETABS instances
 - ``get_status``      — reports connection health
+- ``prepare_session`` — opens ETABS and prepares a saved empty model without computer use
 - ``execute_code``    — runs validated Python against the ETABS COM bridge
 """
 
@@ -24,6 +25,7 @@ from fastmcp.server.lifespan import lifespan
 from mcp.types import ToolAnnotations
 
 from etabs_mcp.connection import ETABSInstance, InstanceRegistry, connect_and_run
+from etabs_mcp.environment import ensure_windows_environment
 from etabs_mcp.file_io.helpers import (
     detect_input_output_collision,
     get_allowed_dirs,
@@ -32,6 +34,7 @@ from etabs_mcp.file_io.helpers import (
 )
 from etabs_mcp.file_io.path_validator import FileIOError
 from etabs_mcp.sandbox.executor import Executor
+from etabs_mcp.session import prepare_etabs_session
 from etabs_mcp.skills import SkillsManager
 from etabs_mcp.status import read_model_status
 from etabs_mcp.version import SERVER_VERSION, check_version_warning
@@ -251,7 +254,14 @@ def _register_tools(
         Call this FIRST before using other etabs-mcp tools.
         Then use ``read_skills`` with one or more specific skill names to load full guidance.
         """
-        return skills_mgr.discover_api()
+        return (
+            "## Start without desktop automation\n\n"
+            "Call prepare_session when ETABS is closed or on its Start Page. "
+            "For a new building use new_model=True and the requested stories/grid. "
+            "Use the returned alias in execute_code. Existing models are protected. "
+            "Do not use computer-use for modelling. View layout is manual: the COM "
+            "API only refreshes existing windows.\n\n" + skills_mgr.discover_api()
+        )
 
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -335,6 +345,45 @@ def _register_tools(
 
     @mcp.tool(
         annotations=ToolAnnotations(
+            title="Open ETABS and prepare a model without desktop automation",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=False,
+        )
+    )
+    def prepare_session(
+        instance: str | None = None,
+        new_model: bool = False,
+        stories: int = 1,
+        story_height: float = 3.0,
+        first_story_height: float = 3.0,
+        grid_lines_x: int = 2,
+        grid_lines_y: int = 2,
+        spacing_x: float = 6.0,
+        spacing_y: float = 6.0,
+    ) -> dict[str, Any]:
+        """Open ETABS if needed and prepare a usable session, without computer-use.
+
+        Call this before creating geometry on the Start Page or when ETABS is closed.
+        For a NEW building use new_model=True (omit instance): it opens a separate
+        ETABS process, creates the requested grid in metres, and saves a unique
+        model. Existing files and unsaved geometry are never reset or overwritten.
+        With new_model=False a loaded model is returned unchanged; an empty,
+        unsaved session receives a new grid and unique file automatically.
+        This tool does not click, type, arrange other apps, or create view windows.
+        If ETABS needs authentication, the user completes that sign-in manually.
+        """
+        try:
+            return prepare_etabs_session(
+                registry, instance, new_model, stories, story_height, first_story_height,
+                grid_lines_x, grid_lines_y, spacing_x, spacing_y,
+            )
+        except Exception as exc:
+            return {"success": False, "computer_use_required": False, "error": str(exc)}
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
             title="Execute Python code",
             readOnlyHint=False,
             destructiveHint=True,
@@ -380,7 +429,7 @@ def _register_tools(
                 "result": None,
                 "stdout": "",
                 "stderr": "",
-                "error": str(e),
+                "error": f"{e} Use prepare_session to open ETABS and prepare a model without computer-use.",
                 "duration_seconds": 0.0,
             }
 
@@ -400,6 +449,13 @@ def _register_tools(
             }
 
         def _run(model: Any) -> dict[str, Any]:
+            status = read_model_status(model)
+            if not status["model_ready"]:
+                return {
+                    "success": False, "result": None, "stdout": "", "stderr": "",
+                    "error": "ETABS has no ready model. Call prepare_session before execute_code; computer-use is not required.",
+                    "duration_seconds": 0.0, "requires_session_preparation": True,
+                }
             return exc.execute(code, model, input_data=input_data).to_dict()
 
         try:
@@ -517,6 +573,7 @@ def _register_tools(
 
 def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = None) -> FastMCP:
     """Create an MCP server instance with tools registered."""
+    ensure_windows_environment()
     fastmcp_kwargs = fastmcp_kwargs or {}
 
     registry = InstanceRegistry()
@@ -531,6 +588,11 @@ def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = No
         version=SERVER_VERSION,
         instructions=(
             "This MCP server bridges AI agents to CSI ETABS via the ETABS COM API. "
+            "For a new building call prepare_session(new_model=True, stories=...) before execute_code. "
+            "If ETABS is closed or shows its Start Page, call prepare_session. "
+            "Do not use computer-use, screenshots, mouse or keyboard to create or modify models. "
+            "The COM API refreshes existing views but does not create/arrange view windows; "
+            "explain this limit instead of falling back to desktop automation. "
             "Use `discover_api` first to list available skills and guidance, then call "
             "`read_skills` with skill names to load detailed instructions. "
             "Use `list_instances` to see running ETABS instances, "
