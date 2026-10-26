@@ -15,6 +15,18 @@ def empty_model():
     )
 
 
+def test_finds_etabs_when_mcp_client_omits_programfiles_variables(monkeypatch, tmp_path):
+    root = tmp_path / "Program Files"
+    exe = root / "Computers and Structures" / "ETABS 23" / "ETABS.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"test")
+    for name in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(selftest.sys, "platform", "win32")
+    monkeypatch.setattr(selftest, "_standard_program_files", lambda: [root])
+    assert selftest.find_etabs_exe() == exe
+
+
 def test_signin_restart_reconnects_only_to_a_new_empty_process(monkeypatch):
     snapshots = iter([{100, 200}, {100, 300}])
     monkeypatch.setattr(selftest, "_etabs_pids", lambda: next(snapshots))

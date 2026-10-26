@@ -94,6 +94,12 @@ def _version_key(name: str) -> tuple[int, ...]:
     return tuple(int(n) for n in numbers) if numbers else (0,)
 
 
+def _standard_program_files() -> list[Path]:
+    """MCP clients may omit ProgramFiles from the child environment."""
+    system_drive = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")).parent
+    return [system_drive / "Program Files", system_drive / "Program Files (x86)"]
+
+
 def find_etabs_exe() -> Path | None:
     """Return the newest ``ETABS.exe`` found under Program Files, if any."""
     roots = []
@@ -101,6 +107,8 @@ def find_etabs_exe() -> Path | None:
         root = os.environ.get(env_name)
         if root:
             roots.append(Path(root) / "Computers and Structures")
+    if sys.platform == "win32":
+        roots.extend(root / "Computers and Structures" for root in _standard_program_files())
 
     candidates: list[tuple[tuple[int, ...], Path]] = []
     seen: set[str] = set()
