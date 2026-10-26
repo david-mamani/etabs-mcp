@@ -20,6 +20,7 @@ from etabs_mcp.version import SERVER_VERSION, check_version_warning
 
 _SESSION_LOCK = threading.Lock()
 _MODEL_LOCK = threading.Lock()
+SESSION_READY_TIMEOUT_S = 120.0
 logger = logging.getLogger(__name__)
 
 
@@ -193,7 +194,9 @@ def prepare_etabs_session(
 
         grid = (stories, story_height, first_story_height, grid_lines_x, grid_lines_y, spacing_x, spacing_y)
         path: Path | None = None
-        deadline = time.monotonic() + 20.0
+        # ETABS may expose COM before its licensed model object is ready.
+        # A cold start can take more than the first initialization attempt.
+        deadline = time.monotonic() + SESSION_READY_TIMEOUT_S
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             # An ETABS sign-in may restart only the process that this call launched.

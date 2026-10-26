@@ -123,6 +123,25 @@ def test_invalid_pointer_on_start_page_retries_initialization_only_while_empty(m
     model.File.Save.assert_called_once()
 
 
+def test_cold_start_can_retry_after_more_than_twenty_seconds(monkeypatch, tmp_path):
+    model = fake_model()
+    clock = [0.0]
+
+    def create_grid(*args):
+        if clock[0] == 0:
+            clock[0] = 25.0
+            raise OSError("ETABS is still starting: Invalid pointer")
+        return 0
+
+    model.File.NewGridOnly.side_effect = create_grid
+    registry = setup(monkeypatch, tmp_path, [connection.ETABSInstance("etabs1", 10, None, "23.3.2")], {10: model})
+    monkeypatch.setattr(session.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(session.time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + delay))
+    result = session.prepare_etabs_session(registry)
+    assert result["success"] and model.InitializeNewModel.call_count == 2
+    model.File.Save.assert_called_once()
+
+
 def test_save_failure_does_not_reset_the_initialized_model_again(monkeypatch, tmp_path):
     model = fake_model()
     model.File.Save.side_effect = None

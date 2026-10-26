@@ -8,6 +8,7 @@
 - Pruebas de arranque desde Start Page, reintento de `Invalid pointer`, archivos vacíos guardados, geometría sin guardar, selección de PID y exposición de la herramienta MCP.
 
 ### Fixed
+- La preparación espera hasta dos minutos cuando ETABS expone COM antes de terminar el arranque. Reintenta únicamente si la sesión sigue vacía y sin guardar.
 - El conector completa en su propio proceso las rutas de Windows omitidas por clientes MCP (`ProgramFiles`, `COMSPEC`, `TMP`), que impedían inicializar el modelo aunque COM pareciera conectado. Conserva las variables que el usuario ya definió.
 - La inicialización COM se ejecuta en un auxiliar del mismo ejecutable, con un hilo STA y búsqueda de DLL separada de las bibliotecas privadas de PyInstaller.
 - Las instrucciones del servidor y las guías indican cómo preparar sesiones vacías sin controlar el escritorio.
