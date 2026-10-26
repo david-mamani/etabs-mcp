@@ -217,16 +217,34 @@ if ($SkipSelfTest) {
     Step "Prueba autonoma: creando y analizando un modelo ETABS"
     Write-Host "    ETABS se abre y se cierra solo; normalmente tarda 1-3 minutos..." -ForegroundColor Gray
 
-    $log = Join-Path $env:TEMP ("etabs-mcp-selftest-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
-    $errLog = "$log.err"
-    $proc = $null
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $testExe
+    $psi.Arguments = '--self-test'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
     $started = $false
     $finished = $false
+    $exitCode = $null
+    $selfTestOutput = ''
+    $selfTestError = ''
+
     try {
-        $proc = Start-Process -FilePath $testExe -ArgumentList '--self-test' -NoNewWindow -PassThru `
-            -RedirectStandardOutput $log -RedirectStandardError $errLog
+        [void]$proc.Start()
         $started = $true
+        $outTask = $proc.StandardOutput.ReadToEndAsync()
+        $errTask = $proc.StandardError.ReadToEndAsync()
         $finished = $proc.WaitForExit(600000)
+        if ($finished) {
+            $proc.WaitForExit()
+            $selfTestOutput = $outTask.Result
+            $selfTestError = $errTask.Result
+            $exitCode = $proc.ExitCode
+        }
     } catch {
         Warn "No pude ejecutar la prueba: $($_.Exception.Message)"
     }
@@ -234,22 +252,15 @@ if ($SkipSelfTest) {
     if (-not $started) {
         $selfTestStatus = 'fail'
     } elseif (-not $finished) {
-        if ($proc) { try { $proc.Kill() } catch { } }
+        try { $proc.Kill() } catch { }
+        if ($selfTestOutput) { Write-Host $selfTestOutput }
         Warn "La prueba excedio 10 minutos y se cancelo."
-        if (Test-Path $log) { Get-Content $log | Write-Host }
-        if (Test-Path $errLog) { Get-Content $errLog | Write-Host }
         $selfTestStatus = 'fail'
     } else {
-        if (Test-Path $log) { Get-Content $log | Write-Host }
-        if (Test-Path $errLog) {
-            $errText = Get-Content $errLog -Raw
-            if (-not [string]::IsNullOrWhiteSpace($errText)) { Write-Host $errText -ForegroundColor DarkGray }
+        if ($selfTestOutput) { Write-Host $selfTestOutput }
+        if (-not [string]::IsNullOrWhiteSpace($selfTestError)) {
+            Write-Host $selfTestError -ForegroundColor DarkGray
         }
-
-        # WaitForExit(ms) no siempre publica ExitCode; la sobrecarga sin
-        # argumentos refresca la informacion del proceso.
-        try { $proc.WaitForExit() } catch { }
-        $exitCode = $proc.ExitCode
 
         if ($exitCode -eq 0) {
             Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
@@ -262,8 +273,6 @@ if ($SkipSelfTest) {
             $selfTestStatus = 'fail'
         }
     }
-
-    Remove-Item $log, $errLog -Force -ErrorAction SilentlyContinue
 }
 
 # ---- 6. Resumen --------------------------------------------------------------
