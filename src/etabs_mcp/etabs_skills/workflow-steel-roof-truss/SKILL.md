@@ -73,12 +73,12 @@ def build_truss_at_y(y_pos, L, Z, rise, n, CH, WB):
         top.append(model.PointObj.AddCartesian(x, y_pos, Z + zt)[0])
 
     for i in range(n):
-        model.FrameObj.AddByPoint(bot[i], bot[i+1], CH)   # bottom chord
+        model.FrameObj.AddByPoint(bot[i], bot[i+1], "", CH)   # bottom chord
     tc = []
     for i in range(n):
-        tc.append(model.FrameObj.AddByPoint(top[i], top[i+1], CH)[0])  # top chord
+        tc.append(model.FrameObj.AddByPoint(top[i], top[i+1], "", CH)[0])  # top chord
     for i in range(1, n):
-        model.FrameObj.AddByPoint(bot[i], top[i], WB)     # verticals
+        model.FrameObj.AddByPoint(bot[i], top[i], "", WB)     # verticals
 
     return bot, top, tc
 ```
@@ -102,8 +102,8 @@ PU     = "CHS60x2.5"  # purlin
 # Columns
 for i in range(n_bays + 1):
     y = i * bay_sp
-    model.FrameObj.AddByCoord(0.0, y, 0, 0.0, y, Z, "Col400x400")
-    model.FrameObj.AddByCoord(L,   y, 0, L,   y, Z, "Col400x400")
+    model.FrameObj.AddByCoord(0.0, y, 0, 0.0, y, Z, "", "Col400x400")
+    model.FrameObj.AddByCoord(L,   y, 0, L,   y, Z, "", "Col400x400")
     lb = model.PointObj.AddCartesian(0.0, y, 0)
     rb = model.PointObj.AddCartesian(L,   y, 0)
     model.PointObj.SetRestraint(lb[0], [True,True,True,True,True,True])
@@ -120,13 +120,13 @@ for j in range(n_bays + 1):
 for j in range(n_bays):
     top_a = all_tops[j]; top_b = all_tops[j + 1]
     for i in range(len(top_a)):
-        model.FrameObj.AddByPoint(top_a[i], top_b[i], PU)
+        model.FrameObj.AddByPoint(top_a[i], top_b[i], "", PU)
 
 # Bottom chord lateral ties (optional — add between bottom nodes at same x)
 for j in range(n_bays):
     bot_a = all_bots[j]; bot_b = all_bots[j + 1]
     for i in [0, len(bot_a)//2, len(bot_a)-1]:   # at ends and midspan only
-        model.FrameObj.AddByPoint(bot_a[i], bot_b[i], WB)
+        model.FrameObj.AddByPoint(bot_a[i], bot_b[i], "", WB)
 
 model.File.Save()
 result = {"joints": model.PointObj.Count(), "frames": model.FrameObj.Count()}

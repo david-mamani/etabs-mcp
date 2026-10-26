@@ -18,7 +18,7 @@ from etabs_mcp.file_io.const import (
 CellValue = str | int | float | bool | None
 
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
-_LINE_SEPARATORS = frozenset("\n\r\x0b\x0c  ")
+_LINE_SEPARATORS = frozenset("\n\r\x0b\x0c\u2028\u2029\x85")
 
 
 def _check_formula_injection(v: str) -> None:

@@ -198,14 +198,14 @@ col_sec = ["COL_S1"] + [f"COL_S{min(i+2, 9)}" for i in range(14)]
 for i in range(15):
     for j in range(6):
         fr = f"COL_{i}_{j}"
-        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i+1,j)], fr)
+        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i+1,j)], "", fr)
         SapModel.FrameObj.SetSection(fr, col_sec[i])
 
 # Beams at each floor level
 for i in range(1, 16):
     for j in range(5):
         fr = f"BM_{i}_{j}"
-        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i,j+1)], fr)
+        SapModel.FrameObj.AddByPoint(nodes[(i,j)], nodes[(i,j+1)], "", fr)
         SapModel.FrameObj.SetSection(fr, "BEAM_1")
 
 # Fixed bases

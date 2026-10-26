@@ -39,8 +39,8 @@ if "Roof_LL" not in lp: model.LoadPatterns.Add("Roof_LL", 11, 0.0, True)  # roof
 # Run after cleaning old truss — columns are identical for all types
 L=23.34; Z_COL=5.0
 
-model.FrameObj.AddByCoord(0.0, 0,0, 0.0, 0,Z_COL, "Col400x400")
-model.FrameObj.AddByCoord(L,   0,0, L,   0,Z_COL, "Col400x400")
+model.FrameObj.AddByCoord(0.0, 0,0, 0.0, 0,Z_COL, "", "Col400x400")
+model.FrameObj.AddByCoord(L,   0,0, L,   0,Z_COL, "", "Col400x400")
 t_lb = model.PointObj.AddCartesian(0.0, 0, 0)
 t_rb = model.PointObj.AddCartesian(L,   0, 0)
 model.PointObj.SetRestraint(t_lb[0], [True,True,True,True,True,True])  # fixed base
@@ -100,12 +100,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],SEC)           # verticals
-for i in range(half):   model.FrameObj.AddByPoint(bot[i],   top[i+1],SEC)   # left diag
-for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1], top[i],  SEC)   # right diag
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", SEC)           # verticals
+for i in range(half):   model.FrameObj.AddByPoint(bot[i],   top[i+1],"", SEC)   # left diag
+for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1], top[i],  "", SEC)   # right diag
 ```
 
 ---
@@ -124,12 +124,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],SEC)            # verticals
-for i in range(half):   model.FrameObj.AddByPoint(top[i],   bot[i+1],SEC)    # left diag
-for i in range(half,n): model.FrameObj.AddByPoint(top[i+1], bot[i],  SEC)    # right diag
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", SEC)            # verticals
+for i in range(half):   model.FrameObj.AddByPoint(top[i],   bot[i+1],"", SEC)    # left diag
+for i in range(half,n): model.FrameObj.AddByPoint(top[i+1], bot[i],  "", SEC)    # right diag
 ```
 
 ---
@@ -148,13 +148,13 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
 # Alternating diagonals — no verticals
 for i in range(n):
-    if i%2==0: model.FrameObj.AddByPoint(bot[i], top[i+1],SEC)
-    else:       model.FrameObj.AddByPoint(top[i], bot[i+1],SEC)
+    if i%2==0: model.FrameObj.AddByPoint(bot[i], top[i+1],"", SEC)
+    else:       model.FrameObj.AddByPoint(top[i], bot[i+1],"", SEC)
 ```
 
 ---
@@ -173,13 +173,13 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],SEC)  # verticals
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", SEC)  # verticals
 for i in range(n):
-    if i%2==0: model.FrameObj.AddByPoint(bot[i], top[i+1],SEC)
-    else:       model.FrameObj.AddByPoint(top[i], bot[i+1],SEC)
+    if i%2==0: model.FrameObj.AddByPoint(bot[i], top[i+1],"", SEC)
+    else:       model.FrameObj.AddByPoint(top[i], bot[i+1],"", SEC)
 ```
 
 ---
@@ -200,10 +200,10 @@ for i in range(n+1):
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+zt)[0])
     # end nodes (zt=0) auto-merge with bot nodes
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],SEC)  # verticals only (no diagonals)
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", SEC)  # verticals only (no diagonals)
 ```
 
 ---
@@ -222,12 +222,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z_COL+depth)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],SEC)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", SEC)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
-for i in range(n+1): model.FrameObj.AddByPoint(bot[i],top[i],SEC)       # verticals at all nodes
-for i in range(half):   model.FrameObj.AddByPoint(bot[i],   top[i+1],SEC)  # left Pratt diag
-for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1], top[i],  SEC)  # right Pratt diag
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
+for i in range(n+1): model.FrameObj.AddByPoint(bot[i],top[i],"", SEC)       # verticals at all nodes
+for i in range(half):   model.FrameObj.AddByPoint(bot[i],   top[i+1],"", SEC)  # left Pratt diag
+for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1], top[i],  "", SEC)  # right Pratt diag
 ```
 
 ---
@@ -250,20 +250,20 @@ top_n = [model.PointObj.AddCartesian(x,0,Z_COL+pz(x))[0]  for x in tx]
 # top_n[0] and top_n[8] have pz=0 → auto-merge with bot_n[0] and bot_n[4]
 
 top_chord=[]
-for i in range(8): top_chord.append(model.FrameObj.AddByPoint(top_n[i],top_n[i+1],SEC)[0])
-for i in range(4): model.FrameObj.AddByPoint(bot_n[i],bot_n[i+1],SEC)  # bottom chord
+for i in range(8): top_chord.append(model.FrameObj.AddByPoint(top_n[i],top_n[i+1],"", SEC)[0])
+for i in range(4): model.FrameObj.AddByPoint(bot_n[i],bot_n[i+1],"", SEC)  # bottom chord
 
 # W-web left half
-model.FrameObj.AddByPoint(bot_n[0], top_n[2], SEC)  # outer diagonal up-right
-model.FrameObj.AddByPoint(top_n[2], bot_n[1], SEC)  # inner diagonal down-right
-model.FrameObj.AddByPoint(bot_n[1], top_n[4], SEC)  # diagonal to apex
-model.FrameObj.AddByPoint(top_n[2], bot_n[2], SEC)  # vertical at L/4
+model.FrameObj.AddByPoint(bot_n[0], top_n[2], "", SEC)  # outer diagonal up-right
+model.FrameObj.AddByPoint(top_n[2], bot_n[1], "", SEC)  # inner diagonal down-right
+model.FrameObj.AddByPoint(bot_n[1], top_n[4], "", SEC)  # diagonal to apex
+model.FrameObj.AddByPoint(top_n[2], bot_n[2], "", SEC)  # vertical at L/4
 
 # W-web right half (mirror)
-model.FrameObj.AddByPoint(bot_n[4], top_n[6], SEC)
-model.FrameObj.AddByPoint(top_n[6], bot_n[3], SEC)
-model.FrameObj.AddByPoint(bot_n[3], top_n[4], SEC)
-model.FrameObj.AddByPoint(top_n[6], bot_n[2], SEC)
+model.FrameObj.AddByPoint(bot_n[4], top_n[6], "", SEC)
+model.FrameObj.AddByPoint(top_n[6], bot_n[3], "", SEC)
+model.FrameObj.AddByPoint(bot_n[3], top_n[4], "", SEC)
+model.FrameObj.AddByPoint(top_n[6], bot_n[2], "", SEC)
 ```
 
 ---
@@ -288,19 +288,19 @@ for i in range(n+1):
         support.append(model.PointObj.AddCartesian(x,0,Z_COL)[0])
 
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],SEC)[0])
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", SEC)[0])
 
 # Scissors bottom chord (both halves)
 for i in range(half):
-    model.FrameObj.AddByPoint(ibot[i],   ibot[i+1],   SEC)
-    model.FrameObj.AddByPoint(ibot[n-i], ibot[n-i-1], SEC)
+    model.FrameObj.AddByPoint(ibot[i],   ibot[i+1],   "", SEC)
+    model.FrameObj.AddByPoint(ibot[n-i], ibot[n-i-1], "", SEC)
 
 # Connect chord ends to column tops
-model.FrameObj.AddByPoint(support[0], ibot[0], SEC)
-model.FrameObj.AddByPoint(support[1], ibot[n], SEC)
+model.FrameObj.AddByPoint(support[0], ibot[0], "", SEC)
+model.FrameObj.AddByPoint(support[1], ibot[n], "", SEC)
 
 # Verticals: top to interior bottom
-for i in range(1,n): model.FrameObj.AddByPoint(top[i],ibot[i],SEC)
+for i in range(1,n): model.FrameObj.AddByPoint(top[i],ibot[i],"", SEC)
 ```
 
 ---
@@ -321,8 +321,8 @@ model.PropFrame.SetRectangle("W_web",  "S355",0.064,0.038)  # web members
 L_tot=8.839; ovh=0.4572; L=L_tot-2*ovh; Z=5.0; rise=(L/2)*(4.0/12.0)
 xs=ovh; xm=ovh+L/2; xe=ovh+L
 
-model.FrameObj.AddByCoord(xs,0,0,xs,0,Z,"Col400x400")
-model.FrameObj.AddByCoord(xe,0,0,xe,0,Z,"Col400x400")
+model.FrameObj.AddByCoord(xs,0,0,xs,0,Z,"", "Col400x400")
+model.FrameObj.AddByCoord(xe,0,0,xe,0,Z,"", "Col400x400")
 lb=model.PointObj.AddCartesian(xs,0,0); rb=model.PointObj.AddCartesian(xe,0,0)
 model.PointObj.SetRestraint(lb[0],[True,True,True,True,True,True])
 model.PointObj.SetRestraint(rb[0],[True,True,True,True,True,True])
@@ -340,21 +340,21 @@ bn=[model.PointObj.AddCartesian(x,0,Z)[0] for x in bx]
 
 tc=[]
 for i in range(len(tn)-1):
-    tc.append(model.FrameObj.AddByPoint(tn[i],tn[i+1],"A_chord")[0])
+    tc.append(model.FrameObj.AddByPoint(tn[i],tn[i+1],"", "A_chord")[0])
 for i in range(len(bn)-1):
-    model.FrameObj.AddByPoint(bn[i],bn[i+1],"B_chord")
+    model.FrameObj.AddByPoint(bn[i],bn[i+1],"", "B_chord")
 
 # W2: outer diagonals (eave → first interior bottom chord node)
-model.FrameObj.AddByPoint(tn[1],bn[1],"W_web")
-model.FrameObj.AddByPoint(tn[9],bn[3],"W_web")
+model.FrameObj.AddByPoint(tn[1],bn[1],"", "W_web")
+model.FrameObj.AddByPoint(tn[9],bn[3],"", "W_web")
 
 # W1: Fink W-webs
-model.FrameObj.AddByPoint(bn[1],tn[3],"W_web"); model.FrameObj.AddByPoint(tn[3],bn[2],"W_web")
-model.FrameObj.AddByPoint(bn[2],tn[5],"W_web")  # up to ridge
-model.FrameObj.AddByPoint(bn[3],tn[7],"W_web"); model.FrameObj.AddByPoint(tn[7],bn[2],"W_web")
+model.FrameObj.AddByPoint(bn[1],tn[3],"", "W_web"); model.FrameObj.AddByPoint(tn[3],bn[2],"", "W_web")
+model.FrameObj.AddByPoint(bn[2],tn[5],"", "W_web")  # up to ridge
+model.FrameObj.AddByPoint(bn[3],tn[7],"", "W_web"); model.FrameObj.AddByPoint(tn[7],bn[2],"", "W_web")
 
 # Verticals at inner top-chord panel points
-model.FrameObj.AddByPoint(tn[3],bn[1],"W_web"); model.FrameObj.AddByPoint(tn[7],bn[3],"W_web")
+model.FrameObj.AddByPoint(tn[3],bn[1],"", "W_web"); model.FrameObj.AddByPoint(tn[7],bn[3],"", "W_web")
 
 # Roof loads on main span top chord only (skip overhang panels tc[0] and tc[9])
 for fn in tc[1:9]:
@@ -391,10 +391,10 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)   # verticals only
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)   # verticals only
 ```
 
 ## BT-2 Bowstring — Pratt Web ✅ VERIFIED (26 joints, 47 frames)
@@ -410,12 +410,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)           # verticals
-for i in range(half):   model.FrameObj.AddByPoint(bot[i],top[i+1],WB)     # left Pratt diag
-for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1],top[i],WB)     # right Pratt diag
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)           # verticals
+for i in range(half):   model.FrameObj.AddByPoint(bot[i],top[i+1],"", WB)     # left Pratt diag
+for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1],top[i],"", WB)     # right Pratt diag
 ```
 
 ## BT-3 Bowstring — Howe Web ✅ VERIFIED (26 joints, 47 frames)
@@ -431,12 +431,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)           # verticals
-for i in range(half):   model.FrameObj.AddByPoint(top[i],bot[i+1],WB)     # left Howe diag
-for i in range(half,n): model.FrameObj.AddByPoint(top[i+1],bot[i],WB)     # right Howe diag
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)           # verticals
+for i in range(half):   model.FrameObj.AddByPoint(top[i],bot[i+1],"", WB)     # left Howe diag
+for i in range(half,n): model.FrameObj.AddByPoint(top[i+1],bot[i],"", WB)     # right Howe diag
 ```
 
 ## BT-4 Bowstring — Warren Web ✅ VERIFIED (26 joints, 36 frames)
@@ -452,12 +452,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
 for i in range(n):
-    if i%2==0: model.FrameObj.AddByPoint(bot[i],top[i+1],WB)
-    else:      model.FrameObj.AddByPoint(top[i],bot[i+1],WB)
+    if i%2==0: model.FrameObj.AddByPoint(bot[i],top[i+1],"", WB)
+    else:      model.FrameObj.AddByPoint(top[i],bot[i+1],"", WB)
 ```
 
 ## BT-5 Bowstring — Modified Warren ✅ VERIFIED (26 joints, 47 frames)
@@ -473,13 +473,13 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+zt)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)  # verticals
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)  # verticals
 for i in range(n):
-    if i%2==0: model.FrameObj.AddByPoint(bot[i],top[i+1],WB)
-    else:      model.FrameObj.AddByPoint(top[i],bot[i+1],WB)
+    if i%2==0: model.FrameObj.AddByPoint(bot[i],top[i+1],"", WB)
+    else:      model.FrameObj.AddByPoint(top[i],bot[i+1],"", WB)
 ```
 
 ## BT-6 Lenticular (Lens) Truss ✅ VERIFIED (26 joints, 37 frames)
@@ -495,10 +495,10 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z-rise_b*para)[0])  # curves DOWN
     top.append(model.PointObj.AddCartesian(x,0,Z+rise_t*para)[0])  # curves UP
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)   # verticals only
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)   # verticals only
 ```
 
 ## BT-7 Lenticular — Pratt Web ✅ VERIFIED (26 joints, 47 frames)
@@ -514,12 +514,12 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z-rise_b*para)[0])
     top.append(model.PointObj.AddCartesian(x,0,Z+rise_t*para)[0])
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)
-for i in range(half):   model.FrameObj.AddByPoint(bot[i],top[i+1],WB)
-for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1],top[i],WB)
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)
+for i in range(half):   model.FrameObj.AddByPoint(bot[i],top[i+1],"", WB)
+for i in range(half,n): model.FrameObj.AddByPoint(bot[i+1],top[i],"", WB)
 ```
 
 ## BT-8 Crescent / Double Bow ✅ VERIFIED (26 joints, 37 frames)
@@ -535,10 +535,10 @@ for i in range(n+1):
     bot.append(model.PointObj.AddCartesian(x,0,Z+rise_b*para)[0])  # shallow upward arc
     top.append(model.PointObj.AddCartesian(x,0,Z+rise_t*para)[0])  # deeper upward arc
 
-for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],CH)
+for i in range(n): model.FrameObj.AddByPoint(bot[i],bot[i+1],"", CH)
 top_chord=[]
-for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],CH)[0])
-for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],WB)   # verticals only
+for i in range(n): top_chord.append(model.FrameObj.AddByPoint(top[i],top[i+1],"", CH)[0])
+for i in range(1,n): model.FrameObj.AddByPoint(bot[i],top[i],"", WB)   # verticals only
 ```
 
 ---

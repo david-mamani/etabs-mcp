@@ -240,7 +240,7 @@ add_node("CM", x_CM_m, y_CM_m, h)
 for wall in ["A", "B", "C", "D"]:
     pts = [nodes[f"{wall}_bot_L"], nodes[f"{wall}_bot_R"],
            nodes[f"{wall}_top_R"], nodes[f"{wall}_top_L"]]
-    model.AreaObj.AddByPoint(4, pts, "WALL250")
+    model.AreaObj.AddByPoint(4, pts, "", "WALL250")
 
 # Fix all base nodes
 for wall in ["A", "B", "C", "D"]:

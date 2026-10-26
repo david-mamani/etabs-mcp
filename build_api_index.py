@@ -183,12 +183,13 @@ def build_python_call(model_path: str, method: str, params: list, cs_sig: str) -
     output_params = []
 
     # Parse cs_sig to find ref/ByRef params
-    ref_params = set(re.findall(r"(?:ref|ByRef|out)\s+\w+\s+(\w+)", cs_sig, re.IGNORECASE))
+    ref_params = set(re.findall(r"(?:ref|ByRef)\s+\w+(?:\s*\[\s*\])?\s+(\w+)", cs_sig, re.IGNORECASE))
+    out_params = set(re.findall(r"out\s+\w+(?:\s*\[\s*\])?\s+(\w+)", cs_sig, re.IGNORECASE))
 
     for p in params:
-        if p["name"] in ref_params or p["name"].startswith("ret") or p["cs_type"] in ("int", "Integer") and p["name"] == "ret":
+        if p["name"] in ref_params | out_params:
             output_params.append(p)
-        else:
+        if p["name"] not in out_params:
             input_params.append(p)
 
     # Build call

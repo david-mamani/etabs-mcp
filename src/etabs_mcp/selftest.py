@@ -10,13 +10,13 @@ The installer runs ``etabs-mcp.exe --self-test``.  This module:
 
 Exit codes: ``0`` = pass, ``1`` = fail, ``2`` = ETABS not installed (skip).
 
-The module deliberately depends only on ``comtypes`` and the standard library,
-so it can run even if the MCP server itself cannot start.
+The test does not import the MCP server or require its transport to start.
 """
 
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import subprocess
@@ -166,19 +166,23 @@ def _launch_etabs(exe: Path) -> int:
     deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
     while time.monotonic() < deadline:
         new_pids = _etabs_pids() - before
+        if len(new_pids) > 1:
+            raise SelfTestError(f"aparecieron varias instancias; no se seleccionara ninguna: {sorted(new_pids)}")
         if new_pids:
-            return max(new_pids)
+            return new_pids.pop()
         time.sleep(1)
     raise SelfTestError(f"ETABS no aparecio en {ETABS_LAUNCH_TIMEOUT_S} s")
 
 
-def _attach_etabs(pid: int) -> Any:
+def _attach_etabs(pid: int, timeout_s: float = ETABS_LAUNCH_TIMEOUT_S) -> Any:
     """Attach to a specific ETABS process through its COM API."""
     import comtypes.client
 
     last_error: BaseException | str | None = None
-    deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
+    deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
+        if pid not in _etabs_pids():
+            raise SelfTestError(f"ETABS (PID {pid}) se cerro durante la conexion")
         for progid in _HELPER_PROGIDS:
             try:
                 helper = comtypes.client.CreateObject(progid)
@@ -195,25 +199,54 @@ def _attach_etabs(pid: int) -> Any:
     )
 
 
-def _wait_for_new_model(
-    model: Any, timeout_s: int, label: str, create, pid: int | None = None
-) -> None:
-    """Retry a model-creation call until ETABS has finished starting up."""
-    deadline = time.monotonic() + timeout_s
+def _prepare_test_session(pid: int, preexisting: set[int]) -> tuple[int, Any, Any]:
+    """Recover an authentication restart without attaching to an existing model.
+
+    Only one newly appeared, empty process may replace our launched process.
+    No model creation is retried after geometry has started to be added.
+    """
+    deadline = time.monotonic() + MODEL_READY_TIMEOUT_S
     last_error: BaseException | str | None = None
+    oapi = None
+    checked_empty = False
+    _log("    Si ETABS solicita Sign In, completa el inicio de sesion manualmente.")
     while time.monotonic() < deadline:
-        if pid is not None and pid not in _etabs_pids():
-            raise SelfTestError(
-                f"ETABS (PID {pid}) se cerro durante {label}. Ultimo error: {last_error}"
-            )
+        running = _etabs_pids()
+        if pid not in running:
+            candidates = running - preexisting
+            if len(candidates) > 1:
+                raise SelfTestError(f"reinicio ambiguo; no se seleccionara un modelo: {sorted(candidates)}")
+            oapi = None
+            checked_empty = False
+            if not candidates:
+                time.sleep(2)
+                continue
+            previous = pid
+            pid = candidates.pop()
+            _log(f"    ETABS se reinicio tras autenticar: PID {previous} -> {pid}")
         try:
-            if _ok(create()):
-                return
+            if oapi is None:
+                oapi = _attach_etabs(pid, timeout_s=2.0)
+            model = oapi.SapModel
+            if not checked_empty:
+                filename = model.GetModelFilename(True)
+                counts = [int(obj.Count()) for obj in (model.PointObj, model.FrameObj, model.AreaObj)]
+                if filename or any(counts):
+                    raise SelfTestError(f"PID {pid} contiene un modelo; la prueba no lo modificara")
+                checked_empty = True
+            if _ok(_create_new_model(model)):
+                return pid, oapi, model
             last_error = "la API devolvio un codigo distinto de cero"
+        except SelfTestError as exc:
+            if "contiene un modelo" in str(exc):
+                raise
+            last_error = exc
+            oapi = None
         except Exception as exc:
             last_error = exc
+            oapi = None
         time.sleep(2)
-    raise SelfTestError(f"{label} no estuvo listo en {timeout_s} s: {last_error}")
+    raise SelfTestError(f"ETABS no estuvo listo en {MODEL_READY_TIMEOUT_S} s: {last_error}")
 
 
 def _create_new_model(model: Any) -> Any:
@@ -243,15 +276,8 @@ def _read_version(model: Any) -> str:
     return version or "desconocida"
 
 
-def _build_model(model: Any, pid: int | None = None) -> list[list[str]]:
-    _log("    creando grilla y pisos...")
-    _wait_for_new_model(
-        model,
-        MODEL_READY_TIMEOUT_S,
-        "creacion del modelo",
-        lambda: _create_new_model(model),
-        pid=pid,
-    )
+def _build_model(model: Any) -> list[list[str]]:
+    """Build on the dedicated, initialized session returned by preparation."""
     _check("SetPresentUnits", model.SetPresentUnits(ETABS_UNITS_KN_M))
 
     stories = model.Story.GetStories()
@@ -287,9 +313,7 @@ def _build_model(model: Any, pid: int | None = None) -> list[list[str]]:
         for corner in range(4):
             _check(
                 "FrameObj.AddByPoint (columna)",
-                model.FrameObj.AddByPoint(
-                    points[level][corner], points[level + 1][corner], "SMOKE"
-                ),
+                model.FrameObj.AddByPoint(points[level][corner], points[level + 1][corner], "", PropName="SMOKE"),
             )
     for level in (1, 2):
         for corner in range(4):
@@ -298,9 +322,12 @@ def _build_model(model: Any, pid: int | None = None) -> list[list[str]]:
                 model.FrameObj.AddByPoint(
                     points[level][corner],
                     points[level][(corner + 1) % 4],
-                    "SMOKE",
+                    "",
+                    PropName="SMOKE",
                 ),
             )
+
+    _verify_frame_sections(model)
 
     self_weight = model.LoadPatterns.GetSelfWTMultiplier("Dead")
     _check("LoadPatterns.GetSelfWTMultiplier", self_weight)
@@ -324,6 +351,16 @@ def _build_model(model: Any, pid: int | None = None) -> list[list[str]]:
     return points
 
 
+def _verify_frame_sections(model: Any) -> None:
+    frames = _check("FrameObj.GetNameList", model.FrameObj.GetNameList())
+    if int(frames[0]) != 16:
+        raise SelfTestError(f"se esperaban 16 barras; se encontraron {frames[0]}")
+    for name in frames[1]:
+        section = _check(f"FrameObj.GetSection({name})", model.FrameObj.GetSection(name))
+        if section[0] != "SMOKE":
+            raise SelfTestError(f"barra {name}: se esperaba SMOKE; se obtuvo {section[0]}")
+
+
 def _output_path() -> Path:
     local_appdata = os.environ.get("LOCALAPPDATA")
     base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
@@ -334,22 +371,14 @@ def _output_path() -> Path:
 
 def _save_model(model: Any) -> Path:
     out = _output_path()
-    try:
-        if out.exists():
-            out.unlink()
-    except OSError:
-        # Another process may be holding the previous smoke file.  Use a
-        # timestamped name instead of failing the installation.
-        out = out.with_name(
-            f"{out.stem}-{time.strftime('%Y%m%d-%H%M%S')}{out.suffix}"
-        )
+    if out.exists():
+        # Preserve previous tests, including files still open in another ETABS.
+        out = out.with_name(f"{out.stem}-{time.time_ns()}{out.suffix}")
 
     _log(f"    guardando {out} ...")
     _check("File.Save", model.File.Save(str(out)))
     if not out.is_file() or out.stat().st_size < 5_000:
-        raise SelfTestError(
-            f"el archivo guardado no existe o es demasiado pequeno: {out}"
-        )
+        raise SelfTestError(f"el archivo guardado no existe o es demasiado pequeno: {out}")
     return out
 
 
@@ -382,9 +411,7 @@ def _read_base_reaction(model: Any) -> tuple[float, float]:
             f"(se esperaba la carga de {abs(APPLIED_FZ_KN):.0f} kN + peso propio)"
         )
     if abs(abs(total_fx) - abs(APPLIED_FX_KN)) > 1.0:
-        raise SelfTestError(
-            f"reaccion horizontal distinta de la carga aplicada: {total_fx:.2f} kN"
-        )
+        raise SelfTestError(f"reaccion horizontal distinta de la carga aplicada: {total_fx:.2f} kN")
     if max(abs(value) for value in fy) > 1.0:
         raise SelfTestError(f"reaccion FY inesperada: {fy!r}")
     return total_fz, total_fx
@@ -409,11 +436,13 @@ def _print_banner(version: str) -> None:
     _log("=" * 64)
 
 
-def run_self_test(server_version: str) -> int:
+def run_self_test(server_version: str, report_path: str | None = None) -> int:
     """Run the full smoke test and return an exit code (0/1/2)."""
     _print_banner(server_version)
     oapi = None
     try:
+        if report_path:
+            Path(report_path).write_text(json.dumps({"success": False}), encoding="utf-8")
         exe = find_etabs_exe()
         if exe is None:
             _log("SKIP: no se encontro ETABS en Program Files.")
@@ -422,12 +451,12 @@ def run_self_test(server_version: str) -> int:
 
         _step(1, 7, f"ETABS encontrado: {exe}")
         _step(2, 7, "abriendo ETABS...")
+        preexisting = _etabs_pids()
         pid = _launch_etabs(exe)
-        oapi = _attach_etabs(pid)
-        model = oapi.SapModel
 
         _step(3, 7, "esperando licencia y creando el modelo...")
-        points = _build_model(model, pid)
+        pid, oapi, model = _prepare_test_session(pid, preexisting)
+        points = _build_model(model)
         version = _read_version(model)
         _log(f"    ETABS {version}: {len(points) * 4} nodos, 16 frames, 2 pisos")
 
@@ -443,6 +472,27 @@ def run_self_test(server_version: str) -> int:
         _log(f"    FZ = {total_fz:.2f} kN   FX = {total_fx:.2f} kN")
 
         _step(7, 7, "dejando ETABS abierto...")
+        from etabs_mcp.status import model_paths_match, read_model_status
+
+        # This process owns an STA proxy on its main thread. Validate it here;
+        # the installer checks the independent MCP connection in --status after
+        # this process has exited and released its COM objects.
+        connector_status = read_model_status(model)
+        if not connector_status["model_ready"] or not model_paths_match(connector_status["model_path"], out):
+            raise SelfTestError(f"el conector MCP no identifica el archivo de prueba del PID {pid}")
+        if report_path:
+            Path(report_path).write_text(
+                json.dumps(
+                    {
+                        "success": True,
+                        "pid": pid,
+                        "model_path": str(out),
+                        "etabs_version": version,
+                        "server_version": server_version,
+                    }
+                ),
+                encoding="utf-8",
+            )
         _leave_open(oapi, model)
         oapi = None
 

@@ -104,9 +104,9 @@ Frame elements represent beams, columns, and braces.
 ### Add a Frame by Joint Names
 
 ```python
-# AddByPoint(Point1, Point2, PropName="Default", UserName="", CSys="Global")
+# AddByPoint(Point1, Point2, Name="", PropName="Default", UserName="")
 # Returns: [name_assigned, ret]
-t = model.FrameObj.AddByPoint("1", "2", "W14X82")
+t = model.FrameObj.AddByPoint("1", "2", "", "W14X82")
 frame_name = t[0]
 ret = t[-1]
 print("Added frame:", frame_name)
@@ -115,9 +115,9 @@ print("Added frame:", frame_name)
 ### Add a Frame by Coordinates
 
 ```python
-# AddByCoord(xi, yi, zi, xj, yj, zj, PropName="Default", UserName="", CSys="Global")
+# AddByCoord(xi, yi, zi, xj, yj, zj, Name="", PropName="Default", UserName="", CSys="Global")
 # Returns: [name_assigned, ret]
-t = model.FrameObj.AddByCoord(0, 0, 0, 0, 0, 4, "Col400x400")
+t = model.FrameObj.AddByCoord(0, 0, 0, 0, 0, 4, "", "Col400x400")
 col_name = t[0]
 ```
 
@@ -195,27 +195,27 @@ Area elements represent slabs, walls, and shells.
 ### Add an Area by Coordinates
 
 ```python
-# AddByCoord(NumberPoints, x[], y[], z[], PropName="Default", UserName="", CSys="Global")
-# Returns: [name_assigned, ret]  (for AddByCoord name IS at [0])
+# AddByCoord(NumberPoints, x[], y[], z[], Name="", PropName="Default", UserName="", CSys="Global")
+# Returns: [x[], y[], z[], name_assigned, ret] in ETABS 23.3.2 / comtypes
 x_list = [0.0, 5.0, 5.0, 0.0]
 y_list = [0.0, 0.0, 5.0, 5.0]
 z_list = [3.0, 3.0, 3.0, 3.0]
-t = model.AreaObj.AddByCoord(4, x_list, y_list, z_list, "Slab200")
-area_name = t[0]
+t = model.AreaObj.AddByCoord(4, x_list, y_list, z_list, "", "Slab200")
+area_name = t[-2]
 ```
 
 ### Add an Area by Joint Names
 
 ```python
-# AddByPoint(NumberPoints, points[], PropName="Default", UserName="")
+# AddByPoint(NumberPoints, points[], Name="", PropName="Default", UserName="")
 # Returns: [(joint_names_tuple), area_element_name, ret]
 # VERIFIED: area name is at [1] NOT [0] — [0] is the input joint names tuple
-t = model.AreaObj.AddByPoint(4, ["1", "2", "3", "4"], "Wall200")
+t = model.AreaObj.AddByPoint(4, ["1", "2", "3", "4"], "", "Wall200")
 area_name = t[1]   # ← [1] not [0]
 ret = t[2]
 
 # Also works with 3-node triangular areas:
-t2 = model.AreaObj.AddByPoint(3, ["1", "2", "3"], "Wall200")
+t2 = model.AreaObj.AddByPoint(3, ["1", "2", "3"], "", "Wall200")
 tri_name = t2[1]
 ```
 
@@ -443,7 +443,7 @@ members_data = {
 }
 
 for ends in members_data.values():
-    model.FrameObj.AddByPoint(node_map[ends[0]], node_map[ends[1]], "Tube150x3")
+    model.FrameObj.AddByPoint(node_map[ends[0]], node_map[ends[1]], "", "Tube150x3")
 ```
 
 ### Column + Truss Assembly
@@ -457,8 +457,8 @@ x_right = 23.34  # from coordinate mapping above
 col_h   = 5.0    # column height (= Z_OFF)
 
 model.PropFrame.SetRectangle("Col400x400", "C25", 0.4, 0.4)
-model.FrameObj.AddByCoord(x_left,  0, 0, x_left,  0, col_h, "Col400x400")
-model.FrameObj.AddByCoord(x_right, 0, 0, x_right, 0, col_h, "Col400x400")
+model.FrameObj.AddByCoord(x_left,  0, 0, x_left,  0, col_h, "", "Col400x400")
+model.FrameObj.AddByCoord(x_right, 0, 0, x_right, 0, col_h, "", "Col400x400")
 
 # Fixed bases — AddCartesian returns existing node if one already exists at that point
 t_lb = model.PointObj.AddCartesian(x_left,  0, 0)
@@ -503,7 +503,7 @@ for story_idx, h in enumerate(story_heights):
     z_top = z_bot + h
     for bay in range(n_bays + 1):
         x = bay * bay_width
-        t = model.FrameObj.AddByCoord(x, 0, z_bot, x, 0, z_top, "Col400x400")
+        t = model.FrameObj.AddByCoord(x, 0, z_bot, x, 0, z_top, "", "Col400x400")
         col_names.append(t[0])
 
 # Create beams at each floor level
@@ -513,7 +513,7 @@ for story_idx, h in enumerate(story_heights):
     for bay in range(n_bays):
         x1 = bay * bay_width
         x2 = (bay + 1) * bay_width
-        t = model.FrameObj.AddByCoord(x1, 0, z, x2, 0, z, "Beam300x600")
+        t = model.FrameObj.AddByCoord(x1, 0, z, x2, 0, z, "", "Beam300x600")
         beam_names.append(t[0])
 
 ret = model.File.Save()
@@ -549,3 +549,31 @@ for fn in frame_names:
 
 result = frames
 ```
+
+<!-- BEGIN TYPELIB CONTRACT -->
+## Type-library validation
+Validated against ETABS 23.3.2, `ETABSv1.tlb`.
+Type-library SHA-256: `3823416b05d80d148b63a2f490cd2acea2797d0fc64157c5cc8882c8fc24ef0e`.
+Parameters marked `inout` are inputs AND returned values. Preserve their order.
+For object creation, pass an empty `Name` before `PropName`. Check `result[-1] == 0`.
+
+```python
+result = model.FrameObj.AddByPoint(Point1, Point2, Name, PropName, UserName)
+# returns [Name, ret_code]
+```
+
+```python
+result = model.FrameObj.AddByCoord(XI, YI, ZI, XJ, YJ, ZJ, Name, PropName, UserName, CSys)
+# returns [Name, ret_code]
+```
+
+```python
+result = model.AreaObj.AddByPoint(NumberPoints, Point, Name, PropName, UserName)
+# returns [Point, Name, ret_code]
+```
+
+```python
+result = model.AreaObj.AddByCoord(NumberPoints, X, Y, Z, Name, PropName, UserName, CSys)
+# returns [X, Y, Z, Name, ret_code]
+```
+<!-- END TYPELIB CONTRACT -->

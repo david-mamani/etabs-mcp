@@ -77,7 +77,7 @@ ret = model.PropMaterial.SetWeightAndMass("C30", 1, 25.0)
 
 ret = model.PropFrame.SetRectangle("COL400",    "C30", 0.4, 0.4)
 ret = model.PropFrame.SetRectangle("BM300x500", "C30", 0.5, 0.3)
-ret = model.PropArea.SetSlab("SLAB125", 0, 0, "C30", 0.125)
+ret = model.PropArea.SetSlab("SLAB125", 0, 1, "C30", 0.125)
 ```
 
 ## Step 2 — Grid and L-shaped Node Layout
@@ -113,7 +113,7 @@ for iz in range(3):
     for iy in range(5):
         for ix in range(5):
             if ne(ix, iy) and (ix,iy,iz) in nodes and (ix,iy,iz+1) in nodes:
-                model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "COL400")
+                model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy,iz+1)], "", "COL400")
 
 # Force-assign sections (ETABS 23 quirk — AddByPoint may not apply section)
 tl = model.FrameObj.GetNameList()
@@ -139,13 +139,13 @@ for iz in range(1, 4):
     for iy in range(5):
         for ix in range(4):
             if (ix,iy,iz) in nodes and (ix+1,iy,iz) in nodes:
-                t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "BM300x500")
+                t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix+1,iy,iz)], "", "BM300x500")
                 model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
     # Y-direction beams
     for iy in range(4):
         for ix in range(5):
             if (ix,iy,iz) in nodes and (ix,iy+1,iz) in nodes:
-                t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "BM300x500")
+                t = model.FrameObj.AddByPoint(nodes[(ix,iy,iz)], nodes[(ix,iy+1,iz)], "", "BM300x500")
                 model.FrameObj.SetReleases(t[0], [False]*4+[True,True], [False]*4+[True,True])
 ```
 
@@ -166,7 +166,7 @@ for iz in range(1, 4):
                     nodes[(ix+1, iy+1, iz)],
                     nodes[(ix,   iy+1, iz)],
                 ]
-                model.AreaObj.AddByPoint(4, pts, "SLAB125")
+                model.AreaObj.AddByPoint(4, pts, "", "SLAB125")
 # Panels: 4×4=16 per floor minus 1 cut-out bay = 15 × 3 floors = 45 total
 ```
 
@@ -295,7 +295,7 @@ rx, ry, irr = reentrant_corner_check(7.5, 30, 6.0, 24)
 
 - `ne(ix, iy)` only excludes node (ix=4, iy=4) = (X=30m, Y=24m) — the single missing corner node forms the L-shape ✓
 - `panel_exists(ix, iy)` skips the top-right slab bay (ix=3, iy=3) since corner (4,4) missing ✓
-- `AreaObj.AddByPoint(4, pts, sec)` → area name at `t[1]`, NOT `t[0]` (see DE11 note) ✓
+- `AreaObj.AddByPoint(4, pts, "", sec)` → area name at `t[1]`, NOT `t[0]` (see DE11 note) ✓
 - Section force-assign loop required after `AddByPoint` (see DE12 note) ✓
 - **Re-entrant corner check is geometric only** — no displacement extraction needed for the §12.3.2.1 classification ✓
 - Total plan nodes per floor: 24 (25 minus 1 cut-out) ✓

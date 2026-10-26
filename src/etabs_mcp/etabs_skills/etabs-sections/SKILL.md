@@ -174,25 +174,25 @@ ret = model.SetPresentUnits(6)  # kN_m — thickness in metres
 # ── SetSlab — VERIFIED WORKING ✓ ──
 # SetSlab(Name, SlabType, ShellType, MatProp, Thickness) → ret
 # SlabType: 0=Slab, 1=Drop, 2=Stiff, 3=Ribbed, 4=Waffle, 5=Mat, 6=Footing
-# ShellType (0-based): 0=ShellThin, 1=ShellThick, 2=Membrane
-ret = model.PropArea.SetSlab("Slab200", 0, 0, "C30", 0.2)   # Slab, ShellThin, 200mm
-ret = model.PropArea.SetSlab("Slab300", 0, 1, "C30", 0.3)   # Slab, ShellThick, 300mm
-ret = model.PropArea.SetSlab("Membrane200", 0, 2, "C30", 0.2)  # Slab, Membrane
+# ShellType: 1=ShellThin, 2=ShellThick, 3=Membrane
+ret = model.PropArea.SetSlab("Slab200", 0, 1, "C30", 0.2)   # Slab, ShellThin, 200mm
+ret = model.PropArea.SetSlab("Slab300", 0, 2, "C30", 0.3)   # Slab, ShellThick, 300mm
+ret = model.PropArea.SetSlab("Membrane200", 0, 3, "C30", 0.2)  # Slab, Membrane
 
 # GetSlab(Name) → [slabType, shellType, matName, thickness_m, color, notes, guid, ret]
 t = model.PropArea.GetSlab("Slab200")
 slab_type = t[0]   # 0=Slab, 1=Drop, etc.
-shell_type = t[1]  # 0=ShellThin, 1=ShellThick, 2=Membrane
+shell_type = t[1]  # 1=ShellThin, 2=ShellThick, 3=Membrane
 mat = t[2]
 thickness = t[3]
 print("SlabType:", slab_type, "ShellType:", shell_type, "Mat:", mat, "t:", thickness)
 
 # ── SetWall — VERIFIED WORKING ✓ ──
 # SetWall(Name, WallType, ShellType, MatProp, Thickness) → ret
-# WallType: 0=Specified, 1=Auto
-# ShellType (0-based): 0=ShellThin, 1=ShellThick, 2=Membrane
-ret = model.PropArea.SetWall("Wall200", 0, 0, "C30", 0.2)   # Specified, ShellThin
-ret = model.PropArea.SetWall("Wall300", 0, 1, "C30", 0.3)   # Specified, ShellThick
+# WallType: 1=Specified, 2=AutoSelectList
+# ShellType: 1=ShellThin, 2=ShellThick, 3=Membrane
+ret = model.PropArea.SetWall("Wall200", 1, 1, "C30", 0.2)   # Specified, ShellThin
+ret = model.PropArea.SetWall("Wall300", 1, 2, "C30", 0.3)   # Specified, ShellThick
 
 # GetWall(Name) → [wallType, shellType, matName, thickness, color, notes, guid, ret]
 t2 = model.PropArea.GetWall("Wall200")
@@ -201,7 +201,7 @@ wall_type = t2[0]; shell_type = t2[1]; mat = t2[2]; thickness = t2[3]
 # ── SetDeck — VERIFIED WORKING ✓ ──
 # SetDeck(Name, DeckType, ShellType, MatProp, Thickness) → ret
 # DeckType: 1=FilledDeck, 2=UnfilledDeck, 3=SolidSlab
-ret = model.PropArea.SetDeck("Deck100", 2, 0, "A992Fy50", 0.1)  # UnfilledDeck
+ret = model.PropArea.SetDeck("Deck100", 2, 1, "A992Fy50", 0.1)  # UnfilledDeck
 
 # GetDeck(Name) → [deckType, shellType, matName, thickness, ...]
 t3 = model.PropArea.GetDeck("Deck100")
@@ -273,8 +273,8 @@ ret = model.PropFrame.SetRectangle("Beam300x600", "C30", 0.6, 0.3)
 ret = model.PropFrame.SetRectangle("Beam250x500", "C30", 0.5, 0.25)
 
 # Area sections — use SetSlab/SetWall (SetShell_1 does NOT exist in ETABS 23)
-ret = model.PropArea.SetSlab("Slab200", 0, 0, "C30", 0.2)   # SlabType=0, ShellThin=0
-ret = model.PropArea.SetWall("Wall200", 0, 0, "C30", 0.2)   # WallType=0, ShellThin=0
+ret = model.PropArea.SetSlab("Slab200", 0, 1, "C30", 0.2)   # SlabType=0, ShellThin=1
+ret = model.PropArea.SetWall("Wall200", 1, 1, "C30", 0.2)   # WallType=1, ShellThin=1
 
 t = model.PropFrame.GetNameList()
 frame_sections = list(t[1])
@@ -283,3 +283,62 @@ area_sections = list(t2[1])
 
 result = {"frame_sections": frame_sections, "area_sections": area_sections}
 ```
+
+<!-- BEGIN TYPELIB CONTRACT -->
+## Type-library validation
+Validated against ETABS 23.3.2, `ETABSv1.tlb`.
+Type-library SHA-256: `3823416b05d80d148b63a2f490cd2acea2797d0fc64157c5cc8882c8fc24ef0e`.
+Parameters marked `inout` are inputs AND returned values. Preserve their order.
+For object creation, pass an empty `Name` before `PropName`. Check `result[-1] == 0`.
+
+`eShellType`:
+- `eShellType_ShellThin = 1`
+- `eShellType_ShellThick = 2`
+- `eShellType_Membrane = 3`
+- `eShellType_PlateThin_DO_NOT_USE = 4`
+- `eShellType_PlateThick_DO_NOT_USE = 5`
+- `eShellType_Layered = 6`
+
+`eWallPropType`:
+- `eWallPropType_Specified = 1`
+- `eWallPropType_AutoSelectList = 2`
+
+`eSlabType`:
+- `eSlabType_Slab = 0`
+- `eSlabType_Drop = 1`
+- `eSlabType_Stiff_DO_NOT_USE = 2`
+- `eSlabType_Ribbed = 3`
+- `eSlabType_Waffle = 4`
+- `eSlabType_Mat = 5`
+- `eSlabType_Footing = 6`
+
+`eDeckType`:
+- `eDeckType_Filled = 1`
+- `eDeckType_Unfilled = 2`
+- `eDeckType_SolidSlab = 3`
+
+```python
+result = model.PropArea.SetSlab(Name, SlabType, ShellType, MatProp, Thickness, Color, notes, GUID)
+# returns int (see method documentation for its meaning)
+```
+
+```python
+result = model.PropArea.SetWall(Name, WallPropType, ShellType, MatProp, Thickness, Color, notes, GUID)
+# returns int (see method documentation for its meaning)
+```
+
+```python
+result = model.PropArea.SetDeck(Name, DeckType, ShellType, MatProp, Thickness, Color, notes, GUID)
+# returns int (see method documentation for its meaning)
+```
+
+```python
+result = model.PropArea.GetSlab(Name, SlabType, ShellType, MatProp, Thickness, Color, notes, GUID)
+# returns [SlabType, ShellType, MatProp, Thickness, Color, notes, GUID, ret_code]
+```
+
+```python
+result = model.PropArea.GetWall(Name, WallPropType, ShellType, MatProp, Thickness, Color, notes, GUID)
+# returns [WallPropType, ShellType, MatProp, Thickness, Color, notes, GUID, ret_code]
+```
+<!-- END TYPELIB CONTRACT -->

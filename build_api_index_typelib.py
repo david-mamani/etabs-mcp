@@ -1,330 +1,257 @@
-"""
-ETABS OAPI Type Library → API Index Builder
-============================================
-Extracts all COM interfaces, methods, and properties directly from
-ETABSv1.dll's embedded type library — no CHM required.
+"""Build comtypes call contracts from the installed ETABS type library.
 
-Produces the same etabs_api_index.json format as build_api_index.py
-so it's a drop-in replacement for search_docs.
-
-Run:
-    py build_api_index_typelib.py
-    # or point to a specific DLL:
-    py build_api_index_typelib.py --dll "C:\\path\\to\\ETABSv1.dll"
-
-Output:
-    src/etabs_mcp/etabs_api_index.json
-
-Requirements:
-    pip install comtypes
-    (comtypes is already a dependency of etabs-mcp)
+The type library is authoritative for parameter direction, order, defaults,
+return types and enum values. CHM data contributes descriptions only.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
-import re
-import sys
 from pathlib import Path
 
-# ── Output path ──────────────────────────────────────────────────────────────
 OUT_JSON = Path(__file__).parent / "src" / "etabs_mcp" / "etabs_api_index.json"
-
-# ── Default type library path (ETABS 23) ─────────────────────────────────────
-# ETABSv1.tlb  = ETABS-specific interfaces only (~315 KB)
-# CSiAPIv1.tlb = full CSi API including SAP2000/SAFE shared interfaces (~853 KB)
 DEFAULT_DLL = Path(r"C:\Program Files\Computers and Structures\ETABS 23\NativeAPI\x64\ETABSv1.tlb")
-
-# ── VARTYPE → Python type ─────────────────────────────────────────────────────
-# https://docs.microsoft.com/en-us/windows/win32/api/oaidl/ne-oaidl-varenum
-VT_TO_PY: dict[int, str] = {
-    0:  "None",   # VT_EMPTY
-    1:  "None",   # VT_NULL
-    2:  "int",    # VT_I2
-    3:  "int",    # VT_I4
-    4:  "float",  # VT_R4
-    5:  "float",  # VT_R8
-    8:  "str",    # VT_BSTR
-    11: "bool",   # VT_BOOL
-    16: "int",    # VT_I1
-    17: "int",    # VT_UI1
-    18: "int",    # VT_UI2
-    19: "int",    # VT_UI4
-    20: "int",    # VT_I8
-    21: "int",    # VT_UI8
-    22: "int",    # VT_INT
-    23: "int",    # VT_UINT
-    24: "None",   # VT_VOID
-    25: "int",    # VT_HRESULT
+VT_TO_PY = {
+    0: "None",
+    1: "None",
+    2: "int",
+    3: "int",
+    4: "float",
+    5: "float",
+    8: "str",
+    11: "bool",
+    16: "int",
+    17: "int",
+    18: "int",
+    19: "int",
+    20: "int",
+    21: "int",
+    22: "int",
+    23: "int",
+    24: "None",
+    25: "int",
 }
-VT_ARRAY = 0x2000
-VT_BYREF = 0x4000
-VT_PTR   = 26
-
-
-def vt_to_py(vt: int) -> tuple[str, bool]:
-    """Return (python_type_str, is_byref)."""
-    is_byref = bool(vt & VT_BYREF)
-    is_array = bool(vt & VT_ARRAY)
-    base = vt & ~(VT_BYREF | VT_ARRAY | 0x1000)
-    py = VT_TO_PY.get(base, "Any")
-    if is_array:
-        py = f"list[{py}]"
-    return py, is_byref
+COM_INTERNALS = {"QueryInterface", "AddRef", "Release", "GetTypeInfoCount", "GetTypeInfo", "GetIDsOfNames", "Invoke"}
 
 
 def class_name_to_model_path(class_name: str) -> str:
-    """Convert cSapModel → model, cPointObj → model.PointObj, etc."""
-    segments = class_name.split(".")
-    result = []
-    for seg in segments:
-        if seg in ("cSapModel", "SapModel"):
-            result.append("model")
-        elif seg.startswith("c") and len(seg) > 1 and seg[1].isupper():
-            result.append(seg[1:])
-        else:
-            result.append(seg)
-    return ".".join(result)
+    if class_name == "cSapModel":
+        return "model"
+    return "model." + class_name.removeprefix("c")
 
 
-def build_python_call(model_path: str, method: str, params: list[dict]) -> str:
-    """Build a Python calling convention string."""
-    input_params  = [p for p in params if not p["is_byref"]]
-    output_params = [p for p in params if p["is_byref"]]
+def describe_type(info, desc) -> tuple[str, str]:
+    vt = int(desc.vt)
+    if vt == 26:  # VT_PTR, including pointers to SAFEARRAY and enum values
+        return describe_type(info, desc._.lptdesc[0])
+    if vt == 27:  # VT_SAFEARRAY
+        cs_type, py_type = describe_type(info, desc._.lptdesc[0])
+        return cs_type + "[]", f"list[{py_type}]"
+    if vt == 29:  # VT_USERDEFINED
+        ref = info.GetRefTypeInfo(desc._.hreftype)
+        name = ref.GetDocumentation(-1)[0]
+        return name, "int" if ref.GetTypeAttr().typekind == 0 else "Any"
+    py_type = VT_TO_PY.get(vt, "Any")
+    return py_type, py_type
 
-    in_args = ", ".join(p["name"] for p in input_params)
-    base = model_path if model_path else "model"
-    call = f"{base}.{method}({in_args})"
 
-    if output_params:
-        out_names = ", ".join(p["name"] for p in output_params)
-        ret_str = f"# returns [{out_names}, ret_code]"
+def build_python_call(
+    model_path: str, method: str, params: list[dict], *, property_get: bool = False, return_type: str = "int"
+) -> str:
+    # FIN and FOUT are independent. In/out parameters stay in the call AND
+    # the returned tuple. In particular Name must precede PropName.
+    inputs = [p for p in params if p["direction"] in ("in", "inout")]
+    outputs = [p["name"] for p in params if p["direction"] in ("out", "inout")]
+    args = ", ".join(p["name"] for p in inputs)
+    call = f"{model_path}.{method}" + ("" if property_get else f"({args})")
+    if property_get:
+        returns = "# returns property value"
+    elif outputs:
+        returns = f"# returns [{', '.join(outputs)}, ret_code]"
     else:
-        ret_str = "# returns ret_code (0 = success)"
-
-    return f"result = {call}\n{ret_str}"
-
-
-def build_cs_signature(method: str, params: list[dict], ret_py: str) -> str:
-    parts = []
-    for p in params:
-        prefix = "ref " if p["is_byref"] else ""
-        parts.append(f"{prefix}{p['cs_type']} {p['name']}")
-    return f"{ret_py} {method}({', '.join(parts)})"
+        returns = f"# returns {return_type} (see method documentation for its meaning)"
+    return f"result = {call}\n{returns}"
 
 
 def extract_from_typelib(dll_path: Path) -> list[dict]:
-    """Load ETABSv1.dll type library and enumerate all interface methods."""
-    try:
-        import comtypes.typeinfo
-    except ImportError:
-        print("ERROR: comtypes not installed. Run: pip install comtypes")
-        sys.exit(1)
+    import comtypes.typeinfo
 
-    print(f"Loading type library from: {dll_path}")
-    try:
-        tlib = comtypes.typeinfo.LoadTypeLibEx(str(dll_path))
-    except Exception as e:
-        print(f"ERROR: Could not load type library: {e}")
-        sys.exit(1)
-
-    n_types = tlib.GetTypeInfoCount()
-    print(f"Found {n_types} type definitions in library")
-
-    entries: list[dict] = []
-    skipped = 0
-
-    for i in range(n_types):
-        try:
-            typeinfo = tlib.GetTypeInfo(i)
-            attr = typeinfo.GetTypeAttr()
-        except Exception:
-            skipped += 1
+    lib = comtypes.typeinfo.LoadTypeLibEx(str(dll_path))
+    entries = []
+    links = []
+    for i in range(lib.GetTypeInfoCount()):
+        info = lib.GetTypeInfo(i)
+        attr = info.GetTypeAttr()
+        class_name = lib.GetDocumentation(i)[0]
+        if attr.typekind not in (3, 4) or not class_name.startswith("c"):
             continue
-
-        # TKIND: 0=enum, 1=struct, 2=module, 3=interface, 4=dispinterface, 5=coclass, 6=alias, 7=union
-        if attr.typekind not in (3, 4):  # only interfaces and dispinterfaces
-            continue
-
-        try:
-            class_name = tlib.GetDocumentation(i)[0]
-            class_doc  = tlib.GetDocumentation(i)[1] or ""
-        except Exception:
-            continue
-
-        if not class_name or not class_name.startswith("c"):
-            continue  # skip non-ETABS interfaces (IUnknown, IDispatch, etc.)
-
-        model_path = class_name_to_model_path(class_name)
-
         for j in range(attr.cFuncs):
-            try:
-                fdesc = typeinfo.GetFuncDesc(j)
-            except Exception:
-                skipped += 1
+            fd = info.GetFuncDesc(j)
+            method, description, *_ = info.GetDocumentation(fd.memid)
+            if fd.invkind in (4, 8) or method in COM_INTERNALS:
                 continue
+            names = info.GetNames(fd.memid, fd.cParams + 1)
+            params = []
+            for k in range(fd.cParams):
+                elem = fd.lprgelemdescParam[k]
+                paramdesc = elem._.paramdesc
+                flags = int(paramdesc.wParamFlags)
+                if flags & 8:  # FRETVAL is represented by the final return value
+                    continue
+                cs_type, py_type = describe_type(info, elem.tdesc)
+                direction = "inout" if flags & 1 and flags & 2 else "out" if flags & 2 else "in"
+                param = {
+                    "name": names[k + 1],
+                    "cs_type": cs_type,
+                    "py_type": py_type,
+                    "direction": direction,
+                    "flags": flags,
+                    "optional": bool(flags & 16),
+                }
+                if flags & 32:
+                    param["default"] = paramdesc.pparamdescex[0].varDefaultValue.value
+                params.append(param)
+            ret_cs, ret_py = describe_type(info, fd.elemdescFunc.tdesc)
+            property_get = fd.invkind == 2
+            if property_get:
+                links.append((class_name, method, ret_cs))
+            entries.append(
+                {
+                    "title": f"{class_name}.{method} {'Property' if property_get else 'Method'}",
+                    "qualified_name": f"ETABSv1.{class_name}.{method}",
+                    "class": class_name,
+                    "model_path": "",
+                    "method": method,
+                    "description": description or "",
+                    "params": params,
+                    "return_type": ret_py,
+                    "property_get": property_get,
+                    "cs_signature": f"{ret_cs} {method}({', '.join(('ref ' if p['direction'] == 'inout' else 'out ' if p['direction'] == 'out' else '') + p['cs_type'] + ' ' + p['name'] for p in params)})",
+                    "source": "typelib",
+                }
+            )
+    # Resolve real SapModel paths through interface-valued property getters.
+    paths = {"cSapModel": "model"}
+    for _ in range(len(links) + 1):
+        changed = False
+        for owner, prop, target in links:
+            if owner in paths and target.startswith("c") and target not in paths:
+                paths[target] = f"{paths[owner]}.{prop}"
+                changed = True
+        if not changed:
+            break
+    reachable = []
+    for entry in entries:
+        if entry["class"] not in paths:
+            continue  # cHelper / cOAPI are not available through sandbox model
+        entry["model_path"] = paths[entry["class"]]
+        entry["python_call"] = build_python_call(
+            entry["model_path"],
+            entry["method"],
+            entry["params"],
+            property_get=entry["property_get"],
+            return_type=entry["return_type"],
+        )
+        reachable.append(entry)
+    return sorted(reachable, key=lambda e: (e["class"], e["method"]))
 
-            # Skip property put/putref — only get and regular methods
-            # INVOKE_FUNC=1, INVOKE_PROPERTYGET=2, INVOKE_PROPERTYPUT=4, INVOKE_PROPERTYPUTREF=8
-            if fdesc.invkind in (4, 8):
-                continue
 
-            try:
-                docs = typeinfo.GetDocumentation(fdesc.memid)
-                method_name = docs[0]
-                method_doc  = docs[1] or ""
-            except Exception:
-                skipped += 1
-                continue
+def extract_enums(dll_path: Path) -> dict[str, dict[str, int]]:
+    import comtypes.typeinfo
 
-            if not method_name:
-                continue
-
-            # --- Parameter info ---
-            params: list[dict] = []
-            n_params = fdesc.cParams
-
-            for k in range(n_params):
-                try:
-                    elem = fdesc.lprgelemdescParam[k]
-                    vt = int(elem.tdesc.vt)
-                    py_type, is_byref = vt_to_py(vt)
-
-                    # Try to get cs_type name
-                    if vt & VT_BYREF:
-                        base_vt = vt & ~VT_BYREF
-                        cs_type = VT_TO_PY.get(base_vt & ~VT_ARRAY, "Any")
-                        if vt & VT_ARRAY:
-                            cs_type += "[]"
-                    else:
-                        cs_type = VT_TO_PY.get(vt & ~VT_ARRAY, "Any")
-                        if vt & VT_ARRAY:
-                            cs_type += "[]"
-
-                    # Param names come from GetNames
-                    try:
-                        names = typeinfo.GetNames(fdesc.memid, n_params + 1)
-                        param_name = names[k + 1] if k + 1 < len(names) else f"p{k}"
-                    except Exception:
-                        param_name = f"p{k}"
-
-                    params.append({
-                        "name": param_name,
-                        "cs_type": cs_type,
-                        "py_type": py_type,
-                        "is_byref": is_byref,
-                    })
-                except Exception:
-                    params.append({"name": f"p{k}", "cs_type": "Any",
-                                   "py_type": "Any", "is_byref": False})
-
-            # --- Return type ---
-            try:
-                ret_vt = int(fdesc.elemdescFunc.tdesc.vt)
-                ret_py, _ = vt_to_py(ret_vt)
-            except Exception:
-                ret_py = "int"
-
-            qualified_name = f"ETABSv1.{class_name}.{method_name}"
-            python_call    = build_python_call(model_path, method_name, params)
-            cs_sig         = build_cs_signature(method_name, params, ret_py)
-
-            # Strip is_byref from exported params (not needed in JSON consumer)
-            clean_params = [
-                {"name": p["name"], "cs_type": p["cs_type"], "py_type": p["py_type"]}
-                for p in params
-            ]
-
-            entries.append({
-                "title":          f"{class_name}.{method_name} Method",
-                "qualified_name": qualified_name,
-                "class":          class_name,
-                "model_path":     model_path,
-                "method":         method_name,
-                "description":    method_doc,
-                "params":         clean_params,
-                "cs_signature":   cs_sig,
-                "python_call":    python_call,
-                "source":         "typelib",
-            })
-
-    return entries
+    lib = comtypes.typeinfo.LoadTypeLibEx(str(dll_path))
+    enums = {}
+    for i in range(lib.GetTypeInfoCount()):
+        info = lib.GetTypeInfo(i)
+        attr = info.GetTypeAttr()
+        if attr.typekind != 0:
+            continue
+        name = lib.GetDocumentation(i)[0]
+        values = {}
+        for j in range(attr.cVars):
+            var = info.GetVarDesc(j)
+            values[info.GetDocumentation(var.memid)[0]] = int(var._.lpvarValue[0].value)
+        enums[name] = values
+    return enums
 
 
 def merge_with_chm(typelib_entries: list[dict], chm_json_path: Path) -> list[dict]:
-    """
-    Merge typelib entries with existing CHM entries.
-    CHM entries are preferred when they exist (they have better param names
-    from the <dl> HTML). Typelib fills in any methods missing from the CHM.
-    """
-    if not chm_json_path.exists():
-        print("No existing CHM index found — using typelib only.")
-        return typelib_entries
-
-    with open(chm_json_path, encoding="utf-8") as f:
-        chm_entries = json.load(f)
-
-    chm_keys = {(e["class"], e["method"]) for e in chm_entries}
-    new_from_typelib = [
-        e for e in typelib_entries
-        if (e["class"], e["method"]) not in chm_keys
-    ]
-
-    print(f"CHM entries:      {len(chm_entries)}")
-    print(f"Typelib entries:  {len(typelib_entries)}")
-    print(f"New from typelib: {len(new_from_typelib)}  (not in CHM)")
-
-    merged = chm_entries + new_from_typelib
-    merged.sort(key=lambda e: (e["class"], e["method"]))
-    return merged
+    """Keep runtime contracts authoritative; merge only human descriptions."""
+    if chm_json_path.exists():
+        previous = json.loads(chm_json_path.read_text(encoding="utf-8"))
+        descriptions = {(e["class"], e["method"]): e.get("description", "") for e in previous}
+        for entry in typelib_entries:
+            entry["description"] = descriptions.get((entry["class"], entry["method"]), "") or entry["description"]
+    return typelib_entries
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Build ETABS API index from type library")
-    parser.add_argument("--dll", default=str(DEFAULT_DLL),
-                        help="Path to ETABSv1.dll")
-    parser.add_argument("--merge", action="store_true", default=True,
-                        help="Merge with existing CHM index (default: True)")
-    parser.add_argument("--typelib-only", action="store_true",
-                        help="Use typelib only, ignore CHM index")
-    parser.add_argument("--out", default=str(OUT_JSON),
-                        help="Output JSON path")
+def update_verified_guides(entries: list[dict], metadata: dict, root: Path) -> None:
+    """Regenerate the small authoritative contract references inside the guides."""
+    import re
+
+    contracts = {(e["class"], e["method"]): e for e in entries}
+    for guide, classes in {
+        "etabs-geometry": {"cFrameObj": ("AddByPoint", "AddByCoord"), "cAreaObj": ("AddByPoint", "AddByCoord")},
+        "etabs-sections": {"cPropArea": ("SetSlab", "SetWall", "SetDeck", "GetSlab", "GetWall")},
+    }.items():
+        lines = [
+            "<!-- BEGIN TYPELIB CONTRACT -->",
+            "## Type-library validation",
+            f"Validated against ETABS {metadata['etabs_version']}, `{metadata['type_library']}`.",
+            f"Type-library SHA-256: `{metadata['sha256']}`.",
+            "Parameters marked `inout` are inputs AND returned values. Preserve their order.",
+            "For object creation, pass an empty `Name` before `PropName`. Check `result[-1] == 0`.",
+        ]
+        if guide == "etabs-sections":
+            for enum in ("eShellType", "eWallPropType", "eSlabType", "eDeckType"):
+                lines.extend(["", f"`{enum}`:"])
+                lines.extend(f"- `{name} = {value}`" for name, value in metadata["enums"][enum].items())
+        for cls, methods in classes.items():
+            for method in methods:
+                lines.extend(["", "```python", contracts[cls, method]["python_call"], "```"])
+        lines.append("<!-- END TYPELIB CONTRACT -->")
+        block = "\n".join(lines)
+        path = root / guide / "SKILL.md"
+        content = path.read_text(encoding="utf-8")
+        if "<!-- BEGIN TYPELIB CONTRACT -->" in content:
+            content = re.sub(
+                r"<!-- BEGIN TYPELIB CONTRACT -->.*?<!-- END TYPELIB CONTRACT -->",
+                lambda _, block=block: block,
+                content,
+                flags=re.S,
+            )
+        else:
+            content = content.rstrip() + "\n\n" + block + "\n"
+        path.write_text(content, encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dll", default=str(DEFAULT_DLL))
+    parser.add_argument("--out", default=str(OUT_JSON))
+    parser.add_argument("--typelib-only", action="store_true")
+    parser.add_argument("--etabs-version", default="unknown", help="ETABS version used for validation")
+    parser.add_argument("--update-guides", action="store_true")
     args = parser.parse_args()
-
-    dll_path = Path(args.dll)
-    if not dll_path.exists():
-        print(f"ERROR: DLL not found: {dll_path}")
-        print("Specify with --dll path/to/ETABSv1.dll")
-        sys.exit(1)
-
-    entries = extract_from_typelib(dll_path)
-    print(f"\nExtracted {len(entries)} methods from type library")
-
-    out_path = Path(args.out)
-
+    source, out = Path(args.dll), Path(args.out)
+    entries = extract_from_typelib(source)
     if not args.typelib_only:
-        entries = merge_with_chm(entries, out_path)
-        print(f"Merged total: {len(entries)} entries")
-    else:
-        entries.sort(key=lambda e: (e["class"], e["method"]))
-
-    # Stats
-    by_class = {}
-    for e in entries:
-        by_class.setdefault(e["class"], 0)
-        by_class[e["class"]] += 1
-    top = sorted(by_class.items(), key=lambda x: x[1], reverse=True)[:10]
-    print("\nTop 10 classes:")
-    for cls, n in top:
-        print(f"  {n:4d}  {cls}")
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2, ensure_ascii=False)
-    size_kb = out_path.stat().st_size // 1024
-    print(f"\nSaved -> {out_path}  ({size_kb} KB, {len(entries)} entries)")
-    print("\nNext: run  .\\build.ps1  to bundle the updated index into the exe")
+        entries = merge_with_chm(entries, out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    metadata = {
+        "etabs_version": args.etabs_version,
+        "type_library": source.name,
+        "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "method_count": len(entries),
+        "enums": extract_enums(source),
+    }
+    out.with_name("etabs_api_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    if args.update_guides:
+        update_verified_guides(entries, metadata, out.parent / "etabs_skills")
+    print(f"Validated {len(entries)} methods and {len(metadata['enums'])} enums from {source.name}")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="MCP server for CSI ETABS via the ETABS COM API",
     )
 
+    parser.add_argument("--pid", type=int, help="[status] Exact ETABS process ID to check")
+    parser.add_argument("--expected-model", help="[status] Require this exact model file")
+    parser.add_argument("--self-test-report", help="[self-test] Write the test PID and model path as JSON")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
@@ -54,10 +57,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--status",
         action="store_true",
-        help=(
-            "Check that the MCP connector can talk to a running ETABS instance, "
-            "print the status and exit."
-        ),
+        help=("Check that the MCP connector can talk to a running ETABS instance, print the status and exit."),
     )
     parser.add_argument(
         "--port",
@@ -101,12 +101,12 @@ def main(argv: list[str] | None = None) -> None:
         from etabs_mcp.selftest import run_self_test
         from etabs_mcp.version import SERVER_VERSION
 
-        raise SystemExit(run_self_test(SERVER_VERSION))
+        raise SystemExit(run_self_test(SERVER_VERSION, report_path=args.self_test_report))
 
     if args.status:
         from etabs_mcp.status import run_status
 
-        raise SystemExit(run_status())
+        raise SystemExit(run_status(pid=args.pid, expected_model=args.expected_model))
 
     from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
     from starlette.middleware import Middleware
