@@ -1,4 +1,8 @@
 """Protect existing work while preparing real MCP sessions without UI access."""
+import contextlib
+import json
+import sys
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -31,6 +35,8 @@ def setup(monkeypatch, tmp_path, active, models):
     monkeypatch.setattr(session, "_find_etabs_pids", lambda: list(models))
     monkeypatch.setattr(session, "connect_and_run", lambda fn, pid, timeout: fn(models[pid]))
     monkeypatch.setattr(session, "_attach_etabs", lambda pid, timeout_s: SimpleNamespace(SapModel=models[pid]))
+    monkeypatch.setattr(session, "_run_model_preparation",
+                        lambda pid, path, grid, allow_existing: session._prepare_empty_model(models[pid], path, grid, allow_existing))
     monkeypatch.setattr(session, "_model_root", lambda: tmp_path / "models")
     return registry
 
@@ -125,6 +131,33 @@ def test_save_failure_does_not_reset_the_initialized_model_again(monkeypatch, tm
     with pytest.raises(session.ModelSaveError, match="Check write access"):
         session.prepare_etabs_session(registry)
     model.InitializeNewModel.assert_called_once()
+
+
+def test_helper_receives_a_structured_request_and_reports_failure_type(monkeypatch, tmp_path):
+    monkeypatch.setattr(session, "_external_program_environment", lambda: contextlib.nullcontext({}))
+    run = Mock(return_value=SimpleNamespace(returncode=1, stdout=json.dumps({
+        "success":False,"error":"cannot save","error_type":"ModelSaveError"}), stderr=""))
+    monkeypatch.setattr(session.subprocess, "run", run)
+    with pytest.raises(session.ModelSaveError, match="cannot save"):
+        session._run_model_preparation(55,tmp_path/'unique.edb',(1,3,3,2,2,6,6),False)
+    payload=json.loads(run.call_args.args[0][-1])
+    assert payload['pid']==55 and payload['allow_existing'] is False
+    assert run.call_args.kwargs['capture_output'] is True
+
+
+def test_cli_preparation_uses_its_own_sta_thread(monkeypatch, tmp_path, capsys):
+    calls=[]
+    monkeypatch.setitem(sys.modules,"pythoncom",SimpleNamespace(
+        CoInitialize=lambda:calls.append(('init',threading.get_ident())),
+        CoUninitialize=lambda:calls.append(('uninit',threading.get_ident()))))
+    model=fake_model()
+    monkeypatch.setattr(session,"_attach_etabs",lambda pid,timeout_s:SimpleNamespace(SapModel=model))
+    payload=json.dumps({'pid':55,'path':str(tmp_path/'unique.edb'),'grid':[1,3,3,2,2,6,6],'allow_existing':False})
+    assert session.run_preparation_cli(payload)==0
+    response=json.loads(capsys.readouterr().out)
+    assert response['success'] and response['result']['created_model']
+    assert [item[0] for item in calls]==['init','uninit']
+    assert calls[0][1]==calls[1][1] and calls[0][1]!=threading.get_ident()
 
 
 async def test_prepare_session_is_exposed_to_mcp_clients(monkeypatch):

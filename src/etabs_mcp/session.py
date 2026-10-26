@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -11,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from etabs_mcp.connection import InstanceRegistry, _find_etabs_pids, connect_and_run
-from etabs_mcp.selftest import _attach_etabs, _launch_etabs, find_etabs_exe
+from etabs_mcp.selftest import _attach_etabs, _external_program_environment, _launch_etabs, find_etabs_exe
 from etabs_mcp.status import model_paths_match, read_model_status
 from etabs_mcp.version import SERVER_VERSION, check_version_warning
 
@@ -79,6 +82,70 @@ def _prepare_empty_model(
         return {**result, "created_model": True, "saved_path": str(path)}
 
 
+def _run_model_preparation(pid: int, path: Path, grid: tuple, allow_existing: bool) -> dict:
+    """Isolate ETABS initialization from the async MCP host, as in --self-test."""
+    command = [sys.executable]
+    if not getattr(sys, "frozen", False):
+        command.extend(["-m", "etabs_mcp.main"])
+    payload = json.dumps({"pid": pid, "path": str(path), "grid": grid, "allow_existing": allow_existing})
+    with _external_program_environment() as env:
+        try:
+            completed = subprocess.run(
+                [*command, "--prepare-model", payload], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", env=env, timeout=90,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("The preparation helper timed out; check get_status before retrying.") from None
+    try:
+        response = json.loads(completed.stdout)
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(f"Preparation helper failed: {completed.stderr[-1500:]}") from exc
+    if completed.returncode or not response.get("success"):
+        error = str(response.get("error", "Preparation helper failed"))
+        error_class = {
+            "ProtectedModelError": ProtectedModelError, "ModelSaveError": ModelSaveError,
+            "FileExistsError": FileExistsError, "TimeoutError": TimeoutError,
+        }.get(response.get("error_type"), RuntimeError)
+        raise error_class(error)
+    return response["result"]
+
+
+def run_preparation_cli(payload: str) -> int:
+    """Internal JSON worker: one STA and a retained cOAPI, with no MCP event loop."""
+    result_box: list[Any] = [None]
+
+    def worker() -> None:
+        import pythoncom
+
+        pythoncom.CoInitialize()
+        try:
+            request = json.loads(payload)
+            pid, path, grid = int(request["pid"]), Path(request["path"]), tuple(request["grid"])
+            if pid <= 0 or not path.is_absolute() or path.suffix.casefold() != ".edb" or len(grid) != 7:
+                raise ValueError("Invalid preparation request")
+            if not 1 <= grid[0] <= 200 or not all(0 < value <= 1000 for value in grid[1:]):
+                raise ValueError("Invalid grid parameters")
+            application = _attach_etabs(pid, timeout_s=5.0)
+            result_box[0] = _prepare_empty_model(application.SapModel, path, grid, bool(request["allow_existing"]))
+        except Exception as exc:
+            result_box[0] = exc
+        finally:
+            pythoncom.CoUninitialize()
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    thread.join(timeout=80)
+    value = result_box[0]
+    if thread.is_alive() or value is None:
+        value = TimeoutError("ETABS initialization is still pending; check the selected instance before retrying.")
+    if isinstance(value, Exception):
+        print(json.dumps({"success": False, "error": str(value), "error_type": type(value).__name__}), flush=True)
+        return 1
+    print(json.dumps({"success": True, "result": value}), flush=True)
+    return 0
+
+
 def prepare_etabs_session(
     registry: InstanceRegistry,
     instance: str | None = None,
@@ -139,13 +206,7 @@ def prepare_etabs_session(
                     result = {**status, "created_model": False}
                 else:
                     path = path or _new_model_path()
-                    def initialize(_: Any, target_path: Path = path, target_pid: int = pid) -> dict:
-                        # Keep the cOAPI application alive throughout initialization,
-                        # as in the native smoke test; COM objects stay on this STA.
-                        application = _attach_etabs(target_pid, timeout_s=2.0)
-                        return _prepare_empty_model(application.SapModel, target_path, grid, allow_existing=not launched)
-
-                    result = connect_and_run(initialize, pid, timeout=45.0)
+                    result = _run_model_preparation(pid, path, grid, allow_existing=not launched)
                 if not result["model_ready"]:
                     raise RuntimeError("The session is not ready for modelling.")
                 result.update(success=True, alias=registry.assign_alias(pid), pid=pid,
