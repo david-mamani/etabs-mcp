@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -245,6 +246,9 @@ def _prepare_test_session(pid: int, preexisting: set[int]) -> tuple[int, Any, An
     last_error: BaseException | str | None = None
     oapi = None
     checked_empty = False
+    last_reported = None
+    from etabs_mcp.status import normalize_model_path
+
     _log("    Si ETABS solicita Sign In, completa el inicio de sesion manualmente.")
     while time.monotonic() < deadline:
         running = _etabs_pids()
@@ -265,7 +269,7 @@ def _prepare_test_session(pid: int, preexisting: set[int]) -> tuple[int, Any, An
                 oapi = _attach_etabs(pid, timeout_s=2.0)
             model = oapi.SapModel
             if not checked_empty:
-                filename = model.GetModelFilename(True)
+                filename = normalize_model_path(model.GetModelFilename(True))
                 counts = [int(obj.Count()) for obj in (model.PointObj, model.FrameObj, model.AreaObj)]
                 if filename or any(counts):
                     raise SelfTestError(f"PID {pid} contiene un modelo; la prueba no lo modificara")
@@ -281,6 +285,9 @@ def _prepare_test_session(pid: int, preexisting: set[int]) -> tuple[int, Any, An
         except Exception as exc:
             last_error = exc
             oapi = None
+        if str(last_error) != last_reported:
+            _log(f"    esperando ETABS (PID {pid}): {last_error}")
+            last_reported = str(last_error)
         time.sleep(2)
     raise SelfTestError(f"ETABS no estuvo listo en {MODEL_READY_TIMEOUT_S} s: {last_error}")
 
@@ -473,6 +480,25 @@ def _print_banner(version: str) -> None:
 
 
 def run_self_test(server_version: str, report_path: str | None = None) -> int:
+    """Keep every test COM proxy on one explicitly initialized STA thread."""
+    import pythoncom
+
+    outcome = [1]
+
+    def worker() -> None:
+        pythoncom.CoInitialize()
+        try:
+            outcome[0] = _run_self_test(server_version, report_path)
+        finally:
+            pythoncom.CoUninitialize()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+    return outcome[0]
+
+
+def _run_self_test(server_version: str, report_path: str | None = None) -> int:
     """Run the full smoke test and return an exit code (0/1/2)."""
     _print_banner(server_version)
     oapi = None

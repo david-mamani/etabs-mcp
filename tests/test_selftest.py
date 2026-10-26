@@ -41,6 +41,16 @@ def test_restart_never_initializes_an_existing_user_model(monkeypatch):
     create.assert_not_called()
 
 
+def test_untitled_empty_instance_can_be_initialized(monkeypatch):
+    monkeypatch.setattr(selftest, "_etabs_pids", lambda: {200})
+    target = empty_model()
+    target.GetModelFilename = lambda full: "(Untitled)"
+    monkeypatch.setattr(selftest, "_attach_etabs", lambda *a, **kw: SimpleNamespace(SapModel=target))
+    monkeypatch.setattr(selftest, "_create_new_model", lambda model: 0)
+    pid, _, selected = selftest._prepare_test_session(200, set())
+    assert pid == 200 and selected is target
+
+
 def test_ambiguous_restart_does_not_select_a_process(monkeypatch):
     monkeypatch.setattr(selftest, "_etabs_pids", lambda: {100, 300, 400})
     with pytest.raises(selftest.SelfTestError, match="ambiguo"):
@@ -131,3 +141,28 @@ def test_frozen_launcher_clears_and_restores_dll_search_path(monkeypatch, tmp_pa
         assert os.environ["PATH"] == original_path
         raise OSError("spawn failed")
     assert [c.args[0] for c in setter.call_args_list] == [None, str(bundle)]
+
+
+def test_selftest_initializes_and_releases_com_on_its_worker(monkeypatch):
+    import sys
+    import threading
+
+    calls = []
+    monkeypatch.setitem(
+        sys.modules,
+        "pythoncom",
+        SimpleNamespace(
+            CoInitialize=lambda: calls.append(("init", threading.get_ident())),
+            CoUninitialize=lambda: calls.append(("uninit", threading.get_ident())),
+        ),
+    )
+
+    def run(version, report):
+        calls.append(("run", threading.get_ident()))
+        return 0
+
+    monkeypatch.setattr(selftest, "_run_self_test", run)
+    assert selftest.run_self_test("2.2.2") == 0
+    assert [name for name, _ in calls] == ["init", "run", "uninit"]
+    assert len({ident for _, ident in calls}) == 1
+    assert calls[0][1] != threading.get_ident()

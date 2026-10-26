@@ -8,6 +8,13 @@ from typing import Any
 TIMEOUT_S = 20.0
 
 
+def normalize_model_path(path: str | None) -> str | None:
+    """ETABS also uses '(Untitled)' for a new, unsaved model."""
+    if not path or path.strip().casefold() in {"untitled", "(untitled)"}:
+        return None
+    return path
+
+
 def read_model_status(model: Any) -> dict[str, Any]:
     """Separate COM connectivity from a readable, loaded or unsaved model."""
     result: dict[str, Any] = {
@@ -22,7 +29,7 @@ def read_model_status(model: Any) -> dict[str, Any]:
     try:
         version = model.GetVersion()
         result["etabs_version"] = str(version[0] if isinstance(version, (list, tuple)) else version)
-        result["model_path"] = model.GetModelFilename(True) or None
+        result["model_path"] = normalize_model_path(model.GetModelFilename(True))
         result["model_locked"] = bool(model.GetModelIsLocked())
         counts = [int(obj.Count()) for obj in (model.PointObj, model.FrameObj, model.AreaObj)]
         result["model_empty"] = not any(counts)
@@ -35,6 +42,7 @@ def read_model_status(model: Any) -> dict[str, Any]:
 
 def model_paths_match(actual: str | None, expected: str | Path) -> bool:
     """Accept ETABS's .$et working filename only in the expected folder."""
+    actual = normalize_model_path(actual)
     if not actual:
         return False
     actual_path, expected_path = Path(actual).resolve(), Path(expected).resolve()

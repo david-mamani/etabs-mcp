@@ -22,6 +22,8 @@ def model(path="", count=0):
     ("path", "count", "state", "ready"),
     [
         ("", 0, "empty", False),
+        ("(Untitled)", 0, "empty", False),
+        ("(Untitled)", 12, "unsaved", True),
         ("", 12, "unsaved", True),
         ("test.edb", 12, "loaded", True),
     ],
