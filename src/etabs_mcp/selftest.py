@@ -185,7 +185,7 @@ def _etabs_pids() -> set[int]:
     return pids
 
 
-def _launch_etabs(exe: Path) -> int:
+def _launch_etabs(exe: Path, timeout_s: float = ETABS_LAUNCH_TIMEOUT_S) -> int:
     """Start ETABS detached from this process and return its PID.
 
     ``explorer.exe`` starts ETABS from the already-running Windows shell.  A
@@ -200,7 +200,7 @@ def _launch_etabs(exe: Path) -> int:
     except OSError as exc:
         raise SelfTestError(f"no pude abrir ETABS: {exc}") from exc
 
-    deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
+    deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         new_pids = _etabs_pids() - before
         if len(new_pids) > 1:
@@ -208,7 +208,7 @@ def _launch_etabs(exe: Path) -> int:
         if new_pids:
             return new_pids.pop()
         time.sleep(1)
-    raise SelfTestError(f"ETABS no aparecio en {ETABS_LAUNCH_TIMEOUT_S} s")
+    raise SelfTestError(f"ETABS no aparecio en {timeout_s} s")
 
 
 def _attach_etabs(pid: int, timeout_s: float = ETABS_LAUNCH_TIMEOUT_S) -> Any:

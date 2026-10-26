@@ -32,11 +32,11 @@ Este repositorio es un fork mantenido de [Shekh-Muhsen/ETABS-MCP](https://github
 | Requisito | Versión |
 |---|---|
 | Sistema operativo | Windows 10/11 (64 bits) |
-| CSI ETABS | **21.0 o superior**, instalado. Para usar las herramientas, abierto y con un modelo cargado |
+| CSI ETABS | **21.0 o superior**, instalado. El MCP puede abrirlo y preparar un archivo nuevo |
 | Cliente MCP | OpenCode, Claude Desktop, Claude Code, Cursor, etc. |
 | Python (solo si compilas) | 3.11+ |
 
-> Para **usar** el MCP, ETABS debe estar abierto con un modelo cargado. La **instalación** no necesita que lo abras: el instalador lanza ETABS, crea un modelo de prueba, lo analiza, guarda el `.EDB` y deja ETABS abierto conectado al MCP.
+> No necesitas abrir ETABS ni cargar un archivo de antemano. `prepare_session` abre ETABS y prepara un modelo guardado mediante su API COM, sin ratón, teclado ni `computer-use`. Si ETABS solicita iniciar sesión, el usuario completa esa autenticación.
 >
 > La conexión es por COM (`ETABSv1`), así que no funciona en Linux/macOS ni sin ETABS instalado.
 
@@ -184,10 +184,19 @@ etabs-mcp --allowed-dirs "C:\Proyectos\Edificio" "C:\Export"
 | `read_skills` | Carga una o más skills por nombre (guía paso a paso). |
 | `list_instances` | Instancias de ETABS abiertas (alias, PID, archivo, versión). |
 | `get_status` | Estado de la conexión, versión de ETABS, si el modelo está bloqueado, versión del servidor. |
+| `prepare_session` | Abre ETABS y prepara un modelo. `new_model=True` crea otra instancia y un archivo único; `stories` y los parámetros de malla definen los pisos y ejes. |
 | `execute_code` | Ejecuta Python en un sandbox contra el `SapModel` conectado. |
 | `search_docs` | Búsqueda BM25 sobre **1 407 métodos y propiedades** de la API de ETABS. |
 
 **Sandbox:** el código corre restringido — sin `import`, sin acceso al sistema de archivos, sin shell. Solo están disponibles `model` (`SapModel`), `json` y `math`. Todo el procesamiento es local; no se envía nada a la nube.
+
+### Empezar sin controlar el escritorio
+
+Para crear un edificio, llama primero a `prepare_session(new_model=True, stories=5)` y usa el `alias` devuelto en `execute_code`. Puedes indicar alturas, número de ejes y separaciones en metros. El archivo se guarda en una carpeta única dentro de `%USERPROFILE%\Documents\ETABS-MCP`; no hace falta copiar una plantilla fija.
+
+Con `new_model=False`, un archivo cargado o un modelo con geometría se conserva. Una sesión vacía y sin guardar recibe un modelo nuevo. La herramienta no inicializa un archivo existente, aunque esté vacío.
+
+La API COM de ETABS 23.3.2 solo expone `RefreshView` y `RefreshWindow` para las vistas. Crear ventanas de planta/elevación y distribuirlas con ChatGPT es una operación manual. El MCP informa este límite y no recurre a `computer-use`. Organizar la pantalla no es necesario para crear, modificar o analizar el modelo.
 
 ---
 

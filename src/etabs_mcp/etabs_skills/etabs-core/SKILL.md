@@ -5,6 +5,20 @@ description: "Essential patterns: sandbox rules, the model variable, units, file
 
 # ETABS Core — Sandbox Rules, Units, File & Model Operations
 
+## Start a session without computer-use
+
+Before creating a new building, call `prepare_session(new_model=True, stories=...)`.
+It opens ETABS through its normal executable, initializes a separate empty session
+through COM, and saves a unique file. Use the returned alias in every `execute_code`.
+For an existing project call `prepare_session(instance=...)` without `new_model`;
+a loaded file or unsaved geometry is preserved. No fixed template file is needed.
+
+Do not use computer-use, screenshots, mouse clicks or keyboard input for model
+creation or editing. ETABS may require the user to sign in manually.
+The ETABS 23.3.2 COM View interface only exposes RefreshView and RefreshWindow.
+It cannot create or arrange plan/elevation windows. Explain this limitation and
+leave view layout to the user instead of falling back to desktop automation.
+
 ## The `model` Variable
 
 Inside every `execute_code` call, **`model`** is the pre-connected `SapModel` object (root of the ETABS OAPI v1 COM API). You never import anything — the sandbox provides `model` directly, along with `json` and `math`.

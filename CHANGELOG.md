@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.3] — 2026-10-26
+
+### Added
+- `prepare_session` abre ETABS y prepara un modelo guardado sin `computer-use`. Permite definir pisos, alturas y ejes en metros.
+- Cada modelo nuevo usa una instancia separada y una carpeta única. No necesita un archivo de plantilla compartido ni sobrescribe modelos existentes, incluso si están vacíos.
+- Pruebas de arranque desde Start Page, reintento de `Invalid pointer`, archivos vacíos guardados, geometría sin guardar, selección de PID y exposición de la herramienta MCP.
+
+### Fixed
+- Las instrucciones del servidor y las guías indican cómo preparar sesiones vacías sin controlar el escritorio.
+- `execute_code` devuelve una indicación de `prepare_session` cuando no existe un modelo listo, en lugar de ejecutar código contra una sesión sin inicializar.
+- La limitación de vistas se informa con claridad: la API COM actualiza las ventanas existentes, pero su creación y distribución se realiza manualmente.
+
 ## [2.2.2] — 2026-10-25
 
 ### Fixed
