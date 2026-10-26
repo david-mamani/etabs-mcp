@@ -111,3 +111,23 @@ def test_save_preserves_an_existing_smoke_file(monkeypatch, tmp_path):
     assert out != previous
     assert previous.read_bytes() == b"previous test"
     assert out.exists()
+
+
+def test_frozen_launcher_clears_and_restores_dll_search_path(monkeypatch, tmp_path):
+    import os
+
+    bundle = tmp_path / "bundle"
+    system = tmp_path / "system"
+    setter = Mock(return_value=1)
+    monkeypatch.setattr(selftest.sys, "platform", "win32")
+    monkeypatch.setattr(selftest.sys, "_MEIPASS", str(bundle), raising=False)
+    monkeypatch.setattr(
+        selftest.ctypes, "WinDLL", lambda *a, **kw: SimpleNamespace(SetDllDirectoryW=setter), raising=False
+    )
+    original_path = os.pathsep.join((str(bundle), str(bundle / "lib"), str(system)))
+    monkeypatch.setenv("PATH", original_path)
+    with pytest.raises(OSError, match="spawn failed"), selftest._external_program_environment() as env:
+        assert env["PATH"] == str(system)
+        assert os.environ["PATH"] == original_path
+        raise OSError("spawn failed")
+    assert [c.args[0] for c in setter.call_args_list] == [None, str(bundle)]

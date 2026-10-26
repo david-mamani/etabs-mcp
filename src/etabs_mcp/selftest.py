@@ -16,10 +16,12 @@ The test does not import the MCP server or require its transport to start.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import json
 import os
 import re
 import subprocess
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -126,15 +128,48 @@ def find_etabs_exe() -> Path | None:
     return candidates[0][1]
 
 
+@contextlib.contextmanager
+def _external_program_environment():
+    """Do not let Windows programs inherit PyInstaller's private DLLs.
+
+    See https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html
+    (Launching External Programs / Windows). Restore our search path even
+    when process creation fails; the MCP still needs its bundled libraries.
+    """
+    env = os.environ.copy()
+    bundle = getattr(sys, "_MEIPASS", None)
+    setter = None
+    if sys.platform == "win32" and bundle:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        setter = kernel32.SetDllDirectoryW
+        setter.argtypes = (ctypes.c_wchar_p,)
+        setter.restype = ctypes.c_int
+        if not setter(None):
+            raise ctypes.WinError(ctypes.get_last_error())
+        bundle_path = Path(bundle).resolve()
+        env["PATH"] = os.pathsep.join(
+            part
+            for part in env.get("PATH", "").split(os.pathsep)
+            if part and not Path(part).resolve().is_relative_to(bundle_path)
+        )
+    try:
+        yield env
+    finally:
+        if setter is not None:
+            setter(str(bundle))
+
+
 def _etabs_pids() -> set[int]:
     """Return the PIDs of the running ETABS processes."""
     try:
-        completed = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq ETABS.exe", "/FO", "CSV", "/NH"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        with _external_program_environment() as env:
+            completed = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq ETABS.exe", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
     except OSError:
         return set()
 
@@ -159,7 +194,8 @@ def _launch_etabs(exe: Path) -> int:
     """
     before = _etabs_pids()
     try:
-        subprocess.Popen(["explorer.exe", str(exe)], close_fds=True)
+        with _external_program_environment() as env:
+            subprocess.Popen(["explorer.exe", str(exe)], close_fds=True, env=env)
     except OSError as exc:
         raise SelfTestError(f"no pude abrir ETABS: {exc}") from exc
 

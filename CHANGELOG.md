@@ -3,6 +3,7 @@
 ## [2.2.2] — 2026-10-25
 
 ### Fixed
+- El ejecutable compilado limpia temporalmente la búsqueda de bibliotecas de PyInstaller al abrir programas de Windows. ETABS ya no hereda las DLL privadas del servidor durante la prueba.
 - Descubrimiento de todos los procesos reales de ETABS. El servidor MCP ya no se confunde con `ETABS.exe`. La enumeración usa nombres exactos y handles de Windows de 64 bits.
 - Conexión estricta al PID seleccionado con `GetObjectProcess`. Una instancia no disponible no cambia el destino a otra ventana. Los alias cerrados no se reutilizan.
 - Diagnóstico con PID, `connected`, `model_ready`, `model_empty` y `model_state`. El instalador comprueba el mismo PID y archivo que creó la prueba, incluido un nombre de archivo alternativo.
