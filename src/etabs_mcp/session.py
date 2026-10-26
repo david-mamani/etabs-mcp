@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
@@ -10,12 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from etabs_mcp.connection import InstanceRegistry, _find_etabs_pids, connect_and_run
-from etabs_mcp.selftest import _launch_etabs, find_etabs_exe
+from etabs_mcp.selftest import _attach_etabs, _launch_etabs, find_etabs_exe
 from etabs_mcp.status import model_paths_match, read_model_status
 from etabs_mcp.version import SERVER_VERSION, check_version_warning
 
 _SESSION_LOCK = threading.Lock()
 _MODEL_LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 class ProtectedModelError(RuntimeError):
@@ -58,16 +60,19 @@ def _prepare_empty_model(
             raise RuntimeError("Could not verify that the selected model is empty; it was not reset.")
         if path.exists():
             raise FileExistsError(f"The new model path already exists: {path}")
+        logger.info("Initializing an empty ETABS session for %s", path)
         _check("InitializeNewModel", model.InitializeNewModel(6))
         _check("File.NewGridOnly", model.File.NewGridOnly(*grid))
         counts = [int(obj.Count()) for obj in (model.PointObj, model.FrameObj, model.AreaObj)]
         if any(counts):
             raise ProtectedModelError("The supposedly new grid contains geometry; no save or reset was attempted.")
         try:
+            logger.info("Saving the new ETABS working model to %s", path)
             _check("File.Save", model.File.Save(str(path)))
         except Exception as exc:
             raise ModelSaveError(f"ETABS could not save the new model to {path}. Check write access: {exc}") from exc
         _check("View.RefreshView", model.View.RefreshView(0, False))
+        logger.info("ETABS working model saved: %s", path)
         result = read_model_status(model)
         if not result["model_ready"] or not model_paths_match(result["model_path"], path):
             raise RuntimeError("ETABS did not confirm the newly saved model.")
@@ -134,10 +139,13 @@ def prepare_etabs_session(
                     result = {**status, "created_model": False}
                 else:
                     path = path or _new_model_path()
-                    def initialize(model: Any, target_path: Path = path) -> dict:
-                        return _prepare_empty_model(model, target_path, grid, allow_existing=not launched)
+                    def initialize(_: Any, target_path: Path = path, target_pid: int = pid) -> dict:
+                        # Keep the cOAPI application alive throughout initialization,
+                        # as in the native smoke test; COM objects stay on this STA.
+                        application = _attach_etabs(target_pid, timeout_s=2.0)
+                        return _prepare_empty_model(application.SapModel, target_path, grid, allow_existing=not launched)
 
-                    result = connect_and_run(initialize, pid, timeout=15.0)
+                    result = connect_and_run(initialize, pid, timeout=45.0)
                 if not result["model_ready"]:
                     raise RuntimeError("The session is not ready for modelling.")
                 result.update(success=True, alias=registry.assign_alias(pid), pid=pid,

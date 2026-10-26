@@ -30,6 +30,7 @@ def setup(monkeypatch, tmp_path, active, models):
     registry.get_active_instances = lambda: active
     monkeypatch.setattr(session, "_find_etabs_pids", lambda: list(models))
     monkeypatch.setattr(session, "connect_and_run", lambda fn, pid, timeout: fn(models[pid]))
+    monkeypatch.setattr(session, "_attach_etabs", lambda pid, timeout_s: SimpleNamespace(SapModel=models[pid]))
     monkeypatch.setattr(session, "_model_root", lambda: tmp_path / "models")
     return registry
 
