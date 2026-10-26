@@ -36,7 +36,7 @@ Este repositorio es un fork mantenido de [Shekh-Muhsen/ETABS-MCP](https://github
 | Cliente MCP | OpenCode, Claude Desktop, Claude Code, Cursor, etc. |
 | Python (solo si compilas) | 3.11+ |
 
-> Para **usar** el MCP, ETABS debe estar abierto con un modelo cargado. La **instalación** no necesita que lo abras: el instalador lanza ETABS, crea un modelo de prueba, lo analiza, guarda el `.EDB` y cierra ETABS al terminar.
+> Para **usar** el MCP, ETABS debe estar abierto con un modelo cargado. La **instalación** no necesita que lo abras: el instalador lanza ETABS, crea un modelo de prueba, lo analiza, guarda el `.EDB` y deja ETABS abierto conectado al MCP.
 >
 > La conexión es por COM (`ETABSv1`), así que no funciona en Linux/macOS ni sin ETABS instalado.
 
@@ -56,7 +56,8 @@ Qué hace:
 2. Lo deja en `%LOCALAPPDATA%\etabs-mcp\etabs-mcp.exe` (si el binario está en uso, lo reemplaza en caliente).
 3. Respalda tu `opencode.json` y registra el servidor `etabs` (si ya existe, solo actualiza la ruta).
 4. Prueba que el ejecutable arranque.
-5. **Ejecuta una prueba real con ETABS**: crea un archivo `.EDB`, lo analiza y lo guarda.
+5. **Ejecuta una prueba real con ETABS**: abre ETABS, crea un archivo `.EDB`, lo analiza y lo guarda.
+6. **Comprueba el conector MCP** (`etabs-mcp.exe --status`) contra ese ETABS y lo deja abierto.
 
 No requiere permisos de administrador. Opciones: `-InstallDir`, `-ConfigPath`, `-SkipConfig`, `-SkipSelfTest` y `-ExpectedSha256` (si lo corres desde un archivo en vez de `irm`).
 
@@ -68,12 +69,13 @@ Al terminar, el instalador ejecuta `etabs-mcp.exe --self-test`. Esa prueba:
 - Crea un modelo de 2 pisos, 12 nodos y 16 frames (columnas y vigas de 6 × 6 m).
 - Aplica una carga vertical y una horizontal, corre el análisis y verifica las reacciones en la base.
 - Guarda el archivo en `%LOCALAPPDATA%\etabs-mcp\smoke-test\etabs-mcp-smoke.EDB`.
-- Cierra ETABS al terminar.
+- Deja ETABS abierto con el modelo de prueba.
 
-El resultado se imprime como `PASS`, `FAIL` o `SKIP` (si ETABS no está instalado). El archivo de prueba queda en disco para que lo abras cuando quieras. También puedes correrlo a mano:
+Después ejecuta `etabs-mcp.exe --status`, que se conecta a ese ETABS por el mismo camino que usa el servidor MCP. El resultado se imprime como `PASS`, `FAIL` o `SKIP` (si ETABS no está instalado), con una línea `MCP` y otra `ETABS`. El archivo de prueba queda en disco para que lo abras cuando quieras. También puedes correrlo a mano:
 
 ```powershell
 & "$env:LOCALAPPDATA\etabs-mcp\etabs-mcp.exe" --self-test
+& "$env:LOCALAPPDATA\etabs-mcp\etabs-mcp.exe" --status
 ```
 
 La prueba necesita ETABS 21+ instalado y una licencia disponible. No requiere Python ni permisos de administrador.
@@ -84,10 +86,21 @@ Pega esto en OpenCode, Claude Code o cualquier agente con terminal:
 
 ```text
 Instala este MCP en mi PC: https://github.com/david-mamani/etabs-mcp
-Al terminar, muéstrame el resultado de la prueba automática y la ruta del archivo ETABS que creó.
+Cuando termine, deja ETABS abierto y pregúntame qué quiero modelar.
 ```
 
-El agente corre el instalador, que descarga el `.exe`, respalda el `opencode.json`, registra el servidor y ejecuta la prueba con ETABS solo (lo abre, crea el modelo, lo analiza, lo guarda y lo cierra). No hay pasos manuales. Solo necesita Windows y ETABS 21+ instalado.
+El agente corre el instalador, que descarga el `.exe`, respalda el `opencode.json`, registra el servidor, abre ETABS, crea y analiza el modelo de prueba, comprueba el conector MCP y deja ETABS abierto. No hay pasos manuales.
+
+El flujo completo es:
+
+1. Das el prompt.
+2. Se instala el MCP.
+3. Se abre ETABS y se comprueba el conector MCP.
+4. ETABS se queda abierto y el agente escribe en el chat:
+
+```text
+pásame una imagen de lo que quieras modelar y lo modelaré en ETABS
+```
 
 ### Opción A — Claude Desktop (un solo archivo)
 
@@ -145,8 +158,11 @@ etabs-mcp
 # HTTP local con bearer token (opcional)
 etabs-mcp --transport http --port 18121 --token <tu-token>
 
-# Prueba automatica con ETABS (crea, analiza y guarda un modelo)
+# Prueba automatica con ETABS (crea, analiza y guarda un modelo, deja ETABS abierto)
 etabs-mcp --self-test
+
+# Comprueba que el MCP puede hablar con el ETABS abierto
+etabs-mcp --status
 ```
 
 ### Limitar acceso a archivos

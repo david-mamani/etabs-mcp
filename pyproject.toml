@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "etabs-mcp"
-version = "2.2.0"
+version = "2.2.1"
 description = "MCP server for CSI ETABS via the ETABS COM API"
 readme = "README.md"
 requires-python = ">=3.11"

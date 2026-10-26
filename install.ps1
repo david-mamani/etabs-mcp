@@ -210,72 +210,91 @@ if ($SkipConfig) {
 
 # ---- 5. Prueba autonoma con ETABS --------------------------------------------
 $selfTestStatus = 'skipped'
+$mcpStatus = 'skipped'
+$etabsText = 'sin abrir'
+$mcpText = 'no comprobado'
 $smokeFile = Join-Path $env:LOCALAPPDATA 'etabs-mcp\smoke-test\etabs-mcp-smoke.EDB'
 if ($SkipSelfTest) {
     Step "Prueba autonoma omitida (-SkipSelfTest)"
 } else {
     Step "Prueba autonoma: creando y analizando un modelo ETABS"
-    Write-Host "    ETABS se abre y se cierra solo; normalmente tarda 1-3 minutos..." -ForegroundColor Gray
+    Write-Host "    ETABS se abre y queda abierto; normalmente tarda 1-3 minutos..." -ForegroundColor Gray
 
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $testExe
-    $psi.Arguments = '--self-test'
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
+    # El self-test deja ETABS abierto. Si heredara el stdout del instalador, el
+    # pipe no se cerraria nunca; por eso se redirige a archivos con un wrapper
+    # de cmd y solo se espera al propio cmd.
+    $work = Join-Path $env:TEMP ("etabs-mcp-selftest-{0}" -f $PID)
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $log = Join-Path $work 'selftest.log'
+    $runner = Join-Path $work 'run.cmd'
+    $codeFile = Join-Path $work 'exit.txt'
 
-    $proc = New-Object System.Diagnostics.Process
-    $proc.StartInfo = $psi
+    $runnerText = @(
+        '@echo off',
+        ('cd /d "{0}"' -f (Split-Path -Parent $testExe)),
+        ('"{0}" --self-test > "{1}" 2>&1' -f $testExe, $log),
+        ('echo %ERRORLEVEL%> "{0}"' -f $codeFile)
+    ) -join "`r`n"
+    [System.IO.File]::WriteAllText($runner, $runnerText, [System.Text.Encoding]::ASCII)
+
     $started = $false
     $finished = $false
     $exitCode = $null
-    $selfTestOutput = ''
-    $selfTestError = ''
-
     try {
-        [void]$proc.Start()
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $env:ComSpec
+        $psi.Arguments = '/c "{0}"' -f $runner
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $proc = [System.Diagnostics.Process]::Start($psi)
         $started = $true
-        $outTask = $proc.StandardOutput.ReadToEndAsync()
-        $errTask = $proc.StandardError.ReadToEndAsync()
         $finished = $proc.WaitForExit(600000)
-        if ($finished) {
-            $proc.WaitForExit()
-            $selfTestOutput = $outTask.Result
-            $selfTestError = $errTask.Result
-            $exitCode = $proc.ExitCode
-        }
+        if ($finished) { $exitCode = $proc.ExitCode }
     } catch {
         Warn "No pude ejecutar la prueba: $($_.Exception.Message)"
     }
 
+    if (Test-Path $log) { Get-Content $log | Write-Host }
+
     if (-not $started) {
         $selfTestStatus = 'fail'
     } elseif (-not $finished) {
-        try { $proc.Kill() } catch { }
-        if ($selfTestOutput) { Write-Host $selfTestOutput }
         Warn "La prueba excedio 10 minutos y se cancelo."
         $selfTestStatus = 'fail'
+    } elseif ((Test-Path $codeFile) -and ((Get-Content $codeFile -Raw).Trim() -eq '0')) {
+        Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
+        $selfTestStatus = 'pass'
+        $etabsText = 'abierto con el modelo de prueba'
+    } elseif ((Test-Path $codeFile) -and ((Get-Content $codeFile -Raw).Trim() -eq '2')) {
+        Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
+        $selfTestStatus = 'skip'
+        $etabsText = 'no instalado'
     } else {
-        if ($selfTestOutput) { Write-Host $selfTestOutput }
-        if (-not [string]::IsNullOrWhiteSpace($selfTestError)) {
-            Write-Host $selfTestError -ForegroundColor DarkGray
-        }
+        Warn "La prueba fallo (exit $exitCode). El MCP quedo instalado igual."
+        $selfTestStatus = 'fail'
+    }
 
-        if ($exitCode -eq 0) {
-            Ok "Prueba superada: el archivo ETABS se creo, analizo y guardo."
-            $selfTestStatus = 'pass'
-        } elseif ($exitCode -eq 2) {
-            Warn "ETABS no esta instalado; la prueba se omitio. El MCP quedo instalado."
-            $selfTestStatus = 'skip'
-        } else {
-            Warn "La prueba fallo (exit $exitCode). El MCP quedo instalado igual."
-            $selfTestStatus = 'fail'
-        }
+    Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ---- 6. Comprobacion del conector MCP ----------------------------------------
+if ($selfTestStatus -eq 'pass') {
+    Step "Comprobando el conector MCP contra ETABS"
+    $statusOutput = & $testExe --status 2>&1
+    $statusExit = $LASTEXITCODE
+    if ($statusOutput) { $statusOutput | Write-Host }
+    if ($statusExit -eq 0) {
+        Ok "El conector MCP habla con ETABS."
+        $mcpStatus = 'pass'
+        $mcpText = 'conectado a ETABS'
+    } else {
+        Warn "El conector MCP no pudo conectar con ETABS (exit $statusExit)."
+        $mcpStatus = 'fail'
+        $mcpText = 'sin conexion'
     }
 }
 
-# ---- 6. Resumen --------------------------------------------------------------
+# ---- 7. Resumen --------------------------------------------------------------
 Step "Listo"
 $selfTestText = if ($selfTestStatus -eq 'pass') {
     'PASS - modelo ETABS creado y analizado'
@@ -293,10 +312,16 @@ if ($testExe -ne $exePath) { Write-Host "  Prueba con : $testExe" -ForegroundCol
 if (-not $SkipConfig) { Write-Host "  Config     : $ConfigPath" }
 Write-Host "  Prueba     : $selfTestText"
 if ($selfTestStatus -eq 'pass') { Write-Host "  Archivo    : $smokeFile" }
+Write-Host "  MCP        : $mcpText"
+Write-Host "  ETABS      : $etabsText"
 Write-Host ""
 Write-Host "  Siguiente paso:" -ForegroundColor White
 Write-Host "    1. Reinicia OpenCode (o el cliente MCP) para que cargue el servidor." -ForegroundColor Gray
-Write-Host "    2. Abre ETABS con un modelo cargado." -ForegroundColor Gray
+if ($selfTestStatus -eq 'pass') {
+    Write-Host "    2. ETABS queda abierto con el modelo de prueba; no hace falta abrirlo." -ForegroundColor Gray
+} else {
+    Write-Host "    2. Abre ETABS con un modelo cargado." -ForegroundColor Gray
+}
 Write-Host "    3. Pide: 'llama a get_status' y luego 'llama a discover_api'." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Repo: https://github.com/$Repo" -ForegroundColor DarkGray

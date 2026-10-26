@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.1] — 2026-10-25
+
+### Changed
+- **El self-test deja ETABS abierto** con el modelo de prueba (2 pisos, 12 nodos, 16 frames) desbloqueado y visible, en vez de cerrarlo. La instalación encadena directamente con el uso del MCP.
+- `install.ps1` ejecuta el self-test con un wrapper de `cmd` y salida a archivos: el instalador ya no espera a que ETABS cierre el pipe y termina en cuanto acaba la prueba.
+- Nueva comprobación `etabs-mcp.exe --status`: se conecta al ETABS abierto por el mismo camino que el servidor MCP e informa versión, archivo y estado del modelo. El instalador la ejecuta tras el `PASS` y muestra las líneas `MCP` y `ETABS` en el resumen.
+
+### Fixed
+- ETABS 23 podía aceptar `InitializeNewModel` antes de estar listo y luego fallar `File.NewGridOnly` con `Invalid pointer`. Ahora ambas llamadas se reintentan juntas, como exige el arranque real de ETABS.
+- La prueba detecta si ETABS se cierra durante la creación del modelo en vez de esperar el timeout completo.
+- La versión de ETABS se lee después de crear el modelo (al arrancar, `GetVersion` devuelve una cadena vacía).
+
+---
+
 ## [2.2.0] — 2026-10-25
 
 ### Added

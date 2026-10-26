@@ -47,8 +47,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--self-test",
         action="store_true",
         help=(
-            "Run the autonomous ETABS smoke test (creates, analyzes, saves and "
-            "reopens a test model), print the result and exit."
+            "Run the autonomous ETABS smoke test (creates, analyzes and saves a "
+            "test model, leaving ETABS open), print the result and exit."
+        ),
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help=(
+            "Check that the MCP connector can talk to a running ETABS instance, "
+            "print the status and exit."
         ),
     )
     parser.add_argument(
@@ -94,6 +102,11 @@ def main(argv: list[str] | None = None) -> None:
         from etabs_mcp.version import SERVER_VERSION
 
         raise SystemExit(run_self_test(SERVER_VERSION))
+
+    if args.status:
+        from etabs_mcp.status import run_status
+
+        raise SystemExit(run_status())
 
     from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
     from starlette.middleware import Middleware

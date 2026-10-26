@@ -6,7 +6,7 @@ The installer runs ``etabs-mcp.exe --self-test``.  This module:
 2. Launches a dedicated ETABS instance (it never touches an already-open model).
 3. Creates a small two-story model from scratch with the ETABS API.
 4. Saves it, runs the analysis and reads the base reaction.
-5. Leaves the model on disk and closes the ETABS instance it created.
+5. Unlocks the model and leaves ETABS open, ready for the next request.
 
 Exit codes: ``0`` = pass, ``1`` = fail, ``2`` = ETABS not installed (skip).
 
@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import subprocess
 import time
 import traceback
 from pathlib import Path
@@ -26,8 +27,10 @@ from typing import Any
 
 SMOKE_FILE_NAME = "etabs-mcp-smoke.EDB"
 ETABS_UNITS_KN_M = 6
+ETABS_API_PROGID = "CSI.ETABS.API.ETABSObject"
+ETABS_LAUNCH_TIMEOUT_S = 180
 MODEL_READY_TIMEOUT_S = 300
-NEW_MODEL_TIMEOUT_S = 90
+VERSION_TIMEOUT_S = 60
 APPLIED_FX_KN = 100.0
 APPLIED_FZ_KN = -100.0
 
@@ -123,49 +126,86 @@ def find_etabs_exe() -> Path | None:
     return candidates[0][1]
 
 
-def _create_oapi(exe: Path) -> Any:
+def _etabs_pids() -> set[int]:
+    """Return the PIDs of the running ETABS processes."""
+    try:
+        completed = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq ETABS.exe", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return set()
+
+    pids: set[int] = set()
+    for line in completed.stdout.splitlines():
+        parts = [part.strip().strip('"') for part in line.split('","')]
+        if len(parts) >= 2 and parts[0].lower() == "etabs.exe":
+            try:
+                pids.add(int(parts[1]))
+            except ValueError:
+                continue
+    return pids
+
+
+def _launch_etabs(exe: Path) -> int:
+    """Start ETABS detached from this process and return its PID.
+
+    ``explorer.exe`` starts ETABS from the already-running Windows shell.  A
+    direct launch from this PyInstaller bundle makes ETABS inherit the
+    bundle's DLL directory and load our ``VCRUNTIME140.dll``, which crashes it
+    on some machines.  It also keeps ETABS outside the installer's job object.
+    """
+    before = _etabs_pids()
+    try:
+        subprocess.Popen(["explorer.exe", str(exe)], close_fds=True)
+    except OSError as exc:
+        raise SelfTestError(f"no pude abrir ETABS: {exc}") from exc
+
+    deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
+    while time.monotonic() < deadline:
+        new_pids = _etabs_pids() - before
+        if new_pids:
+            return max(new_pids)
+        time.sleep(1)
+    raise SelfTestError(f"ETABS no aparecio en {ETABS_LAUNCH_TIMEOUT_S} s")
+
+
+def _attach_etabs(pid: int) -> Any:
+    """Attach to a specific ETABS process through its COM API."""
     import comtypes.client
 
-    errors: list[str] = []
-    for progid in _HELPER_PROGIDS:
-        try:
-            helper = comtypes.client.CreateObject(progid)
-            oapi = helper.CreateObject(str(exe))
-            if oapi is not None:
-                return oapi
-            errors.append(f"{progid}: CreateObject devolvio None")
-        except Exception as exc:
-            errors.append(f"{progid}: {exc}")
+    last_error: BaseException | str | None = None
+    deadline = time.monotonic() + ETABS_LAUNCH_TIMEOUT_S
+    while time.monotonic() < deadline:
+        for progid in _HELPER_PROGIDS:
+            try:
+                helper = comtypes.client.CreateObject(progid)
+                oapi = helper.GetObjectProcess(ETABS_API_PROGID, pid)
+                if oapi is not None:
+                    return oapi
+                last_error = f"{progid}: GetObjectProcess devolvio None"
+            except Exception as exc:
+                last_error = exc
+        time.sleep(2)
     raise SelfTestError(
-        "No se pudo crear una instancia de ETABS. "
-        "Verifica que ETABS este instalado y con licencia.\n  " + "\n  ".join(errors)
+        f"no pude conectar con ETABS (PID {pid}). "
+        f"Verifica que ETABS este instalado y con licencia. Ultimo error: {last_error}"
     )
 
 
-def _start_etabs(exe: Path) -> Any:
-    last_error: BaseException | str | None = None
-    for attempt in range(1, 4):
-        oapi = None
-        try:
-            oapi = _create_oapi(exe)
-            if _ok(oapi.ApplicationStart()):
-                return oapi
-            last_error = "ApplicationStart devolvio un codigo distinto de cero"
-        except Exception as exc:  # ETABS may still be shutting down / COM busy
-            last_error = exc
-        if oapi is not None:
-            _close(oapi)
-        if attempt < 3:
-            _log(f"    ETABS no arranco (intento {attempt}/3): {last_error}")
-            time.sleep(5)
-    raise SelfTestError(f"ETABS no arranco tras 3 intentos: {last_error}")
-
-
-def _wait_for_new_model(model: Any, timeout_s: int, label: str, create) -> None:
+def _wait_for_new_model(
+    model: Any, timeout_s: int, label: str, create, pid: int | None = None
+) -> None:
     """Retry a model-creation call until ETABS has finished starting up."""
     deadline = time.monotonic() + timeout_s
     last_error: BaseException | str | None = None
     while time.monotonic() < deadline:
+        if pid is not None and pid not in _etabs_pids():
+            raise SelfTestError(
+                f"ETABS (PID {pid}) se cerro durante {label}. Ultimo error: {last_error}"
+            )
         try:
             if _ok(create()):
                 return
@@ -176,19 +216,41 @@ def _wait_for_new_model(model: Any, timeout_s: int, label: str, create) -> None:
     raise SelfTestError(f"{label} no estuvo listo en {timeout_s} s: {last_error}")
 
 
-def _build_model(model: Any) -> list[list[str]]:
+def _create_new_model(model: Any) -> Any:
+    """Initialize a new model and create the grid in one retryable step.
+
+    ETABS 23 sometimes accepts ``InitializeNewModel`` before its internal model
+    object is ready.  Calling it again right before ``File.NewGridOnly`` makes
+    the grid creation succeed, so both calls are retried together.
+    """
+    result = model.InitializeNewModel(ETABS_UNITS_KN_M)
+    if not _ok(result):
+        return result
+    return model.File.NewGridOnly(2, 3.0, 3.0, 2, 2, 6.0, 6.0)
+
+
+def _read_version(model: Any) -> str:
+    """Return the ETABS version, retrying while the API still reports empty."""
+    deadline = time.monotonic() + VERSION_TIMEOUT_S
+    version = ""
+    while time.monotonic() < deadline:
+        result = model.GetVersion()
+        _check("GetVersion", result)
+        version = str(result[0]) if result else ""
+        if version:
+            return version
+        time.sleep(2)
+    return version or "desconocida"
+
+
+def _build_model(model: Any, pid: int | None = None) -> list[list[str]]:
     _log("    creando grilla y pisos...")
     _wait_for_new_model(
         model,
         MODEL_READY_TIMEOUT_S,
-        "InitializeNewModel",
-        lambda: model.InitializeNewModel(ETABS_UNITS_KN_M),
-    )
-    _wait_for_new_model(
-        model,
-        NEW_MODEL_TIMEOUT_S,
-        "File.NewGridOnly",
-        lambda: model.File.NewGridOnly(2, 3.0, 3.0, 2, 2, 6.0, 6.0),
+        "creacion del modelo",
+        lambda: _create_new_model(model),
+        pid=pid,
     )
     _check("SetPresentUnits", model.SetPresentUnits(ETABS_UNITS_KN_M))
 
@@ -333,6 +395,14 @@ def _close(oapi: Any) -> None:
         oapi.ApplicationExit(False)
 
 
+def _leave_open(oapi: Any, model: Any) -> None:
+    """Unlock the smoke model and make sure the ETABS window is visible."""
+    with contextlib.suppress(Exception):
+        model.SetModelIsLocked(False)
+    with contextlib.suppress(Exception):
+        oapi.Unhide()
+
+
 def _print_banner(version: str) -> None:
     _log("=" * 64)
     _log(f" ETABS MCP {version} - prueba automatica de instalacion")
@@ -351,15 +421,15 @@ def run_self_test(server_version: str) -> int:
             return 2
 
         _step(1, 7, f"ETABS encontrado: {exe}")
-        _step(2, 7, "iniciando una instancia nueva de ETABS...")
-        oapi = _start_etabs(exe)
+        _step(2, 7, "abriendo ETABS...")
+        pid = _launch_etabs(exe)
+        oapi = _attach_etabs(pid)
         model = oapi.SapModel
 
         _step(3, 7, "esperando licencia y creando el modelo...")
-        version = model.GetVersion()
-        _check("GetVersion", version)
-        points = _build_model(model)
-        _log(f"    ETABS {version[0]}: {len(points) * 4} nodos, 16 frames, 2 pisos")
+        points = _build_model(model, pid)
+        version = _read_version(model)
+        _log(f"    ETABS {version}: {len(points) * 4} nodos, 16 frames, 2 pisos")
 
         _step(4, 7, "guardando el archivo de prueba...")
         out = _save_model(model)
@@ -372,12 +442,13 @@ def run_self_test(server_version: str) -> int:
         total_fz, total_fx = _read_base_reaction(model)
         _log(f"    FZ = {total_fz:.2f} kN   FX = {total_fx:.2f} kN")
 
-        _step(7, 7, "cerrando ETABS...")
-        _close(oapi)
+        _step(7, 7, "dejando ETABS abierto...")
+        _leave_open(oapi, model)
         oapi = None
 
         _log("")
         _log("PASS: modelo creado, analizado y guardado correctamente.")
+        _log("      ETABS queda abierto con el modelo de prueba.")
         _log(f"      Archivo de prueba: {out}")
         return 0
     except Exception as exc:
