@@ -185,6 +185,8 @@ etabs-mcp --allowed-dirs "C:\Proyectos\Edificio" "C:\Export"
 | `list_instances` | Instancias de ETABS abiertas (alias, PID, archivo, versión). |
 | `get_status` | Estado de la conexión, versión de ETABS, si el modelo está bloqueado, versión del servidor. |
 | `prepare_session` | Abre ETABS y prepara un modelo. `new_model=True` crea otra instancia y un archivo único; `stories` y los parámetros de malla definen los pisos y ejes. |
+| `get_model_geometry` | Lee nodos, barras, áreas, huecos y pisos en metros sin cambiar unidades ni resultados. |
+| `render_model_view` | Genera PNG de planta, elevación y 3D desde la geometría de la API. Devuelve la imagen al chat sin acceder al escritorio. |
 | `execute_code` | Ejecuta Python en un sandbox contra el `SapModel` conectado. |
 | `search_docs` | Búsqueda BM25 sobre **1 407 métodos y propiedades** de la API de ETABS. |
 
@@ -193,6 +195,8 @@ etabs-mcp --allowed-dirs "C:\Proyectos\Edificio" "C:\Export"
 ### Empezar sin controlar el escritorio
 
 Para crear un edificio, llama primero a `prepare_session(new_model=True, stories=5)` y usa el `alias` devuelto en `execute_code`. Puedes indicar alturas, número de ejes y separaciones en metros. El archivo se guarda en una carpeta única dentro de `%USERPROFILE%\Documents\ETABS-MCP`; no hace falta copiar una plantilla fija.
+
+Para obtener imágenes usa `render_model_view(view="3d")`, `render_model_view(view="elevation")` o `render_model_view(view="plan", story="Story3")`. Son dibujos de la geometría real leída desde ETABS, no capturas de su ventana. El MCP no accede al escritorio, al ratón, al teclado ni a menús. Las imágenes no incluyen texturas ni resultados de cálculo; se guardan con nombres únicos en `Documents/ETABS-MCP/exports`. Consulta [el alcance y la referencia funcional](docs/vistas-api.md).
 
 Con `new_model=False`, un archivo cargado o un modelo con geometría se conserva. Una sesión vacía y sin guardar recibe un modelo nuevo. La herramienta no inicializa un archivo existente, aunque esté vacío.
 

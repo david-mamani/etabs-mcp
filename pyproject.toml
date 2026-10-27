@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "etabs-mcp"
-version = "2.2.3"
+version = "2.3.0"
 description = "MCP server for CSI ETABS via the ETABS COM API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
+    "Pillow>=12,<14",
+    "numpy>=1.24,<3",
     "fastmcp>=3.2.3,<5",
     "packaging>=24",
     "starlette>=1.0.0,<2.0.0",

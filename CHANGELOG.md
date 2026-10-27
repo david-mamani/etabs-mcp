@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0] — 2026-10-26
+
+### Added
+- `get_model_geometry` lee coordenadas, barras, áreas, huecos y pisos mediante COM. Convierte las unidades de longitud verificadas en ETABS sin modificar la configuración del modelo.
+- `render_model_view` devuelve PNG de planta, elevación y 3D directamente al cliente MCP. Usa la geometría de la API y guarda un archivo único. No accede a ventanas, capturas, menús, ratón ni teclado.
+- Las instrucciones prohíben recurrir a control de escritorio para cualquier tarea. Las imágenes se identifican expresamente como dibujos de la API, no capturas de ETABS.
+
 ## [2.2.3] — 2026-10-26
 
 ### Added
