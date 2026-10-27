@@ -13,8 +13,12 @@ through COM, and saves a unique file. Use the returned alias in every `execute_c
 For an existing project call `prepare_session(instance=...)` without `new_model`;
 a loaded file or unsaved geometry is preserved. No fixed template file is needed.
 
-Do not use computer-use, screenshots, mouse clicks or keyboard input for model
-creation or editing. ETABS may require the user to sign in manually.
+Never use computer-use, screen control, screenshots, mouse, keyboard or menu
+automation for any ETABS task. ETABS may require the user to sign in manually.
+For images use `render_model_view`: `view="3d"`, `view="elevation"`, or
+`view="plan", story="Story3"`. It returns PNG drawings generated from API data.
+These drawings are not screenshots of ETABS windows. Use `get_model_geometry`
+for a read-only snapshot in metres. Both tools preserve model units and results.
 The ETABS 23.3.2 COM View interface only exposes RefreshView and RefreshWindow.
 It cannot create or arrange plan/elevation windows. Explain this limitation and
 leave view layout to the user instead of falling back to desktop automation.

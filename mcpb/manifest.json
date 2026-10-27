@@ -2,7 +2,7 @@
     "manifest_version":  "0.4",
     "name":  "etabs-mcp",
     "display_name":  "ETABS MCP Server",
-    "version":  "2.2.3",
+    "version":  "2.3.0",
     "description":  "MCP server for CSI ETABS via the ETABS COM API",
     "long_description":  "Servidor MCP para CSI ETABS mediante la API COM oficial. Permite crear y modificar modelos, definir cargas, ejecutar el analisis, extraer resultados y correr diseno estructural desde un agente de IA. Incluye 47 skills y ejecucion de codigo en sandbox.",
     "author":  {
@@ -19,6 +19,14 @@
                                   }
                },
     "tools":  [
+                  {
+                      "name": "get_model_geometry",
+                      "description": "Read point, frame, area, opening and story geometry through COM, without any desktop access."
+                  },
+                  {
+                      "name": "render_model_view",
+                      "description": "Return 3D, plan or elevation PNG drawings generated from API geometry. No screen capture, mouse, keyboard or window access."
+                  },
                   {
                       "name":  "discover_api",
                       "description":  "Discover available API guidance and skills. Call this first before using other etabs-mcp tools."

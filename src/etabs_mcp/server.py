@@ -12,17 +12,18 @@ Exposes MCP tools:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 from fastmcp.server.lifespan import lifespan
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from etabs_mcp.connection import ETABSInstance, InstanceRegistry, connect_and_run
 from etabs_mcp.environment import ensure_windows_environment
@@ -33,6 +34,7 @@ from etabs_mcp.file_io.helpers import (
     write_output_file,
 )
 from etabs_mcp.file_io.path_validator import FileIOError
+from etabs_mcp.model_views import read_model_geometry, render_geometry, save_render
 from etabs_mcp.sandbox.executor import Executor
 from etabs_mcp.session import prepare_etabs_session
 from etabs_mcp.skills import SkillsManager
@@ -259,8 +261,9 @@ def _register_tools(
             "Call prepare_session when ETABS is closed or on its Start Page. "
             "For a new building use new_model=True and the requested stories/grid. "
             "Use the returned alias in execute_code. Existing models are protected. "
-            "Do not use computer-use for modelling. View layout is manual: the COM "
-            "API only refreshes existing windows.\n\n" + skills_mgr.discover_api()
+            "Never use desktop automation, screen control, mouse or keyboard. "
+            "Use render_model_view for 3d, plan and elevation images from API geometry. "
+            "These are drawings, not screenshots of the ETABS window.\n\n" + skills_mgr.discover_api()
         )
 
     @mcp.tool(
@@ -381,6 +384,37 @@ def _register_tools(
             )
         except Exception as exc:
             return {"success": False, "computer_use_required": False, "error": str(exc)}
+
+    @mcp.tool(annotations=ToolAnnotations(title="Read model geometry through the API", readOnlyHint=True,
+                                         idempotentHint=True, openWorldHint=False))
+    def get_model_geometry(instance: str | None = None, max_objects: int = 20000) -> dict[str, Any]:
+        """Read point, frame, area, opening and story geometry in metres.
+
+        Preserves model units, lock, analysis results and all ETABS windows.
+        Uses only the COM model API. Never reads or controls the desktop.
+        """
+        target = _resolve_target(instance)
+        data = connect_and_run(lambda model: read_model_geometry(model, max_objects), target.pid, timeout=120.0)
+        return {**data, "alias": target.alias, "pid": target.pid, "server_version": SERVER_VERSION}
+
+    @mcp.tool(annotations=ToolAnnotations(title="Render model views without desktop access", readOnlyHint=False,
+                                         destructiveHint=False, idempotentHint=False, openWorldHint=False))
+    def render_model_view(view: Literal["3d", "plan", "elevation"] = "3d", story: str | None = None,
+                          instance: str | None = None, width: int = 1600, height: int = 1000) -> CallToolResult:
+        """Generate and return a PNG from ETABS API geometry, with no screen access.
+
+        For a plan specify an exact story such as Story3. Other views are 3d
+        and a frontal elevation. Saves a unique PNG under Documents/ETABS-MCP/exports.
+        These are API-derived drawings, NOT screenshots of ETABS's windows.
+        No clicks, keys, focus changes, menus or native view window changes occur.
+        """
+        data = get_model_geometry(instance)
+        png, metadata = render_geometry(data, view, story, width, height)
+        path = save_render(png, view)
+        metadata.update(success=True, path=str(path), pid=data["pid"], alias=data["alias"], server_version=SERVER_VERSION)
+        return CallToolResult(content=[TextContent(type="text", text=json.dumps(metadata)),
+                                      ImageContent(type="image", data=base64.b64encode(png).decode("ascii"), mimeType="image/png")],
+                              structuredContent=metadata)
 
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -587,10 +621,11 @@ def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = No
         "ETABS MCP",
         version=SERVER_VERSION,
         instructions=(
+            "Use only ETABS APIs. Never use desktop automation, screen control, mouse, keyboard or menu automation. "
+            "For images call render_model_view (3d, plan, elevation); these are API-derived drawings, not screenshots. "
             "This MCP server bridges AI agents to CSI ETABS via the ETABS COM API. "
             "For a new building call prepare_session(new_model=True, stories=...) before execute_code. "
             "If ETABS is closed or shows its Start Page, call prepare_session. "
-            "Do not use computer-use, screenshots, mouse or keyboard to create or modify models. "
             "The COM API refreshes existing views but does not create/arrange view windows; "
             "explain this limit instead of falling back to desktop automation. "
             "Use `discover_api` first to list available skills and guidance, then call "

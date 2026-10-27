@@ -82,7 +82,6 @@ a = Analysis(
         "sklearn",
         "tensorflow",
         "keras",
-        "PIL",
         "matplotlib",
         "pandas",
     ],
