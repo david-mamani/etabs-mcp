@@ -21,7 +21,10 @@
     Si se indica, valida el hash SHA256 del ejecutable descargado.
 
 .PARAMETER SkipConfig
-    Solo descarga el exe; no toca opencode.json.
+    Descarga el exe e instala la skill; no toca opencode.json.
+
+.PARAMETER SkillDir
+    Carpeta de la skill. Por defecto %USERPROFILE%\.agents\skills\etabs-mcp-api.
 
 .PARAMETER SkipSelfTest
     No ejecuta la prueba autonoma con ETABS (crear, analizar y guardar un modelo).
@@ -34,6 +37,7 @@ param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'etabs-mcp'),
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.config\opencode\opencode.json'),
     [string]$ExpectedSha256,
+    [string]$SkillDir = (Join-Path $env:USERPROFILE '.agents\skills\etabs-mcp-api'),
     [switch]$SkipConfig,
     [switch]$SkipSelfTest
 )
@@ -149,6 +153,14 @@ if ($LASTEXITCODE -ne 0 -or $help -notmatch 'etabs-mcp') {
 }
 if ($help -match 'ETABS (version \S+ is below|21)') { }
 Ok "Arranca correctamente"
+
+# Skill incluida en el mismo binario: sin segunda descarga ni control de pantalla.
+Step "Instalando la skill ETABS exclusivamente por API"
+$skillResult = & $testExe --install-skill --skill-dir $SkillDir | Out-String
+if ($LASTEXITCODE -ne 0) { Fail "No se pudo instalar la skill. $skillResult" }
+try { $skillReport = $skillResult | ConvertFrom-Json } catch { Fail "Informe de skill no valido: $skillResult" }
+if (-not $skillReport.success) { Fail "La skill no se instalo: $skillResult" }
+Ok "Skill: $($skillReport.path)"
 
 # ---- 4. Configuracion de OpenCode -------------------------------------------
 if ($SkipConfig) {
@@ -329,6 +341,7 @@ $selfTestText = if ($selfTestStatus -eq 'pass') {
 
 Write-Host ""
 Write-Host "  Ejecutable : $exePath"
+Write-Host "  Skill      : $($skillReport.path)"
 if ($testExe -ne $exePath) { Write-Host "  Prueba con : $testExe" -ForegroundColor Yellow }
 if (-not $SkipConfig) { Write-Host "  Config     : $ConfigPath" }
 Write-Host "  Prueba     : $selfTestText"

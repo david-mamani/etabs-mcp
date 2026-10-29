@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1] — 2026-10-28
+
+### Added
+- Skill de agente `etabs-mcp-api`, incluida en el ejecutable. El instalador la instala automáticamente; también puede instalarse con `--install-skill`, sin iniciar ETABS ni descargar un entorno adicional.
+- Prohibición explícita de Computer Use para todo el flujo de ETABS, incluidos instalación, diagnóstico, imágenes y recuperación, sin alternativas mediante scripts, otros MCP o delegación. La misma política se entrega al inicializar el MCP y en `discover_api`.
+- Instalación repetible de la skill, copia al actualizar y protección de cambios locales y archivos ajenos. La skill no modifica ni desactiva herramientas generales de Codex.
+
 ## [2.3.0] — 2026-10-26
 
 ### Added

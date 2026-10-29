@@ -25,6 +25,7 @@ from fastmcp.server.context import Context
 from fastmcp.server.lifespan import lifespan
 from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
+from etabs_mcp.agent_skill import API_ONLY_POLICY
 from etabs_mcp.connection import ETABSInstance, InstanceRegistry, connect_and_run
 from etabs_mcp.environment import ensure_windows_environment
 from etabs_mcp.file_io.helpers import (
@@ -257,6 +258,7 @@ def _register_tools(
         Then use ``read_skills`` with one or more specific skill names to load full guidance.
         """
         return (
+            "## API-only policy\n\n" + API_ONLY_POLICY + "\n\n"
             "## Start without desktop automation\n\n"
             "Call prepare_session when ETABS is closed or on its Start Page. "
             "For a new building use new_model=True and the requested stories/grid. "
@@ -621,7 +623,7 @@ def create_mcp_server(allowed_dirs: list[Path], fastmcp_kwargs: dict | None = No
         "ETABS MCP",
         version=SERVER_VERSION,
         instructions=(
-            "Use only ETABS APIs. Never use desktop automation, screen control, mouse, keyboard or menu automation. "
+            API_ONLY_POLICY +
             "For images call render_model_view (3d, plan, elevation); these are API-derived drawings, not screenshots. "
             "This MCP server bridges AI agents to CSI ETABS via the ETABS COM API. "
             "For a new building call prepare_session(new_model=True, stories=...) before execute_code. "

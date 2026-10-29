@@ -44,6 +44,16 @@ Este repositorio es un fork mantenido de [Shekh-Muhsen/ETABS-MCP](https://github
 
 ## Instalación
 
+El instalador incluye la skill **etabs-mcp-api** y la guarda en `%USERPROFILE%\.agents\skills\etabs-mcp-api`. La skill prohíbe Computer Use bajo cualquier circunstancia del flujo de ETABS, también para instalación, diagnóstico, vistas e imágenes. No permite eludir la regla mediante scripts, otros conectores o agentes. Se activa para tareas de ETABS y también puedes invocarla con `$etabs-mcp-api`.
+
+Si instalas el ejecutable manualmente, instala la misma skill con:
+
+```powershell
+& "$env:LOCALAPPDATA\etabs-mcp\etabs-mcp.exe" --install-skill
+```
+
+No descarga Python ni abre ETABS para instalarla. Las actualizaciones conservan una copia de la skill anterior. Si hay cambios locales, los preserva y solicita otra carpeta con `--skill-dir`. La skill y las instrucciones del MCP establecen la conducta; no desactivan las herramientas generales del cliente. [Contenido de la skill](src/etabs_mcp/agent_skill/SKILL.md).
+
 ### Instalación automática (recomendada, un comando)
 
 ```powershell
