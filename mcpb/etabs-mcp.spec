@@ -34,6 +34,7 @@ if skills_dir.exists():
             skills_data.append((str(f), str(rel_parent).replace("\\", "/")))
 
 # Bundle API index JSON
+skills_data.append((str(ROOT / "src" / "etabs_mcp" / "agent_skill" / "SKILL.md"), "etabs_mcp/agent_skill"))
 api_index = ROOT / "src" / "etabs_mcp" / "etabs_api_index.json"
 if api_index.exists():
     skills_data.append((str(api_index), "etabs_mcp"))

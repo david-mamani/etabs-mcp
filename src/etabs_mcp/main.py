@@ -27,6 +27,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-model", help="[status] Require this exact model file")
     parser.add_argument("--self-test-report", help="[self-test] Write the test PID and model path as JSON")
     parser.add_argument("--prepare-model", help="[internal] Prepare an empty ETABS model from a JSON request")
+    parser.add_argument("--install-skill", action="store_true", help="Install the API-only agent skill; does not open ETABS")
+    parser.add_argument("--skill-dir", help="[install-skill] Override the destination skill folder")
     parser.add_argument(
         "--transport",
         choices=["stdio", "http"],
@@ -74,6 +76,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(argv)
+    if args.skill_dir and not args.install_skill:
+        parser.error("--skill-dir requires --install-skill")
+    if args.install_skill and (args.prepare_model or args.self_test or args.status):
+        parser.error("--install-skill cannot be combined with model or status operations")
 
     if args.transport == "stdio":
         for opt, default in _HTTP_ONLY_DEFAULTS.items():
@@ -100,6 +106,19 @@ def main(argv: list[str] | None = None) -> None:
 
     ensure_windows_environment()
     args = parse_args(argv)
+
+    if args.install_skill:
+        import json
+
+        from etabs_mcp.agent_skill import install_agent_skill
+
+        try:
+            report = install_agent_skill(args.skill_dir)
+        except (OSError, ValueError) as exc:
+            print(json.dumps({"success": False, "error": str(exc)}), flush=True)
+            raise SystemExit(1) from exc
+        print(json.dumps(report), flush=True)
+        raise SystemExit(0)
 
     if args.prepare_model:
         from etabs_mcp.session import run_preparation_cli
